@@ -17,6 +17,7 @@ import https from 'https';
 import net from 'net';
 import tls from 'tls';
 import { EventEmitter } from 'events';
+import { makeBasicAuthHeader, ProxyUpstream } from './commons';
 
 /**
  * Base class for implementing proxies.
@@ -43,7 +44,7 @@ export abstract class BaseProxy extends EventEmitter {
      * otherwise the returned upstream information is used to establish an onward connection
      * to the upstream proxy.
      */
-    abstract matchRoute(host: string): UpstreamProxy | null;
+    abstract matchRoute(host: string): ProxyUpstream | null;
 
     /**
      * Returns the list of CA certificates chain to use when issuing HTTPS requests.
@@ -152,7 +153,7 @@ export abstract class BaseProxy extends EventEmitter {
         req.pipe(fwdReq);
     }
 
-    protected createUpstreamHttpRequest(req: http.IncomingMessage, upstream: UpstreamProxy): http.ClientRequest {
+    protected createUpstreamHttpRequest(req: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
         const [hostname, port] = upstream.host.split(':');
         const options = {
             hostname,
@@ -165,7 +166,7 @@ export abstract class BaseProxy extends EventEmitter {
             https.request({ ...options, ca: this.getCACertificates() }) :
             http.request(options);
         if (upstream.username || upstream.password) {
-            fwdReq.setHeader('Proxy-Authorization', this.makeAuthHeader(upstream));
+            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
         }
         return fwdReq;
     }
@@ -193,7 +194,7 @@ export abstract class BaseProxy extends EventEmitter {
         }
     }
 
-    protected handleSslUpstream(req: http.IncomingMessage, clientSocket: net.Socket, upstream: UpstreamProxy) {
+    protected handleSslUpstream(req: http.IncomingMessage, clientSocket: net.Socket, upstream: ProxyUpstream) {
         const connectReq = this.createUpstreamConnectReq(req, upstream);
         connectReq.on('error', (err: CustomError) => {
             // TODO check if this is ever invoked
@@ -218,7 +219,7 @@ export abstract class BaseProxy extends EventEmitter {
         connectReq.end();
     }
 
-    protected createUpstreamConnectReq(req: http.IncomingMessage, upstream: UpstreamProxy): http.ClientRequest {
+    protected createUpstreamConnectReq(req: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
         const { useHttps = true } = upstream;
         const [hostname, port] = upstream.host.split(':');
         const request = useHttps ? https.request : http.request;
@@ -233,7 +234,7 @@ export abstract class BaseProxy extends EventEmitter {
             ALPNProtocols: ['http/1.1'],
         } as any);
         if (upstream.username || upstream.password) {
-            connectReq.setHeader('Proxy-Authorization', this.makeAuthHeader(upstream));
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
         }
         return connectReq;
     }
@@ -255,18 +256,6 @@ export abstract class BaseProxy extends EventEmitter {
         clientSocket.pipe(remoteSocket, { end: false });
     }
 
-    protected makeAuthHeader(upstream: UpstreamProxy) {
-        const { username = '', password = '' } = upstream;
-        return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-    }
-
-}
-
-export interface UpstreamProxy {
-    host: string;
-    username?: string;
-    password?: string;
-    useHttps?: boolean;
 }
 
 interface CustomError {

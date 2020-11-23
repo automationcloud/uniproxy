@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { BaseProxy, UpstreamProxy } from './base-proxy';
+import { BaseProxy } from './base-proxy';
+import { ProxyUpstream } from './commons';
 
 /**
  * Proxy with dynamically configurable routing based on hostnames.
@@ -25,7 +26,7 @@ import { BaseProxy, UpstreamProxy } from './base-proxy';
 export class RoutingProxy extends BaseProxy {
     protected routes: ProxyRoute[] = [];
 
-    matchRoute(host: string): UpstreamProxy | null {
+    matchRoute(host: string): ProxyUpstream | null {
         for (const route of this.routes) {
             if (route.hostRegexp.test(host)) {
                 return route.upstream;
@@ -47,7 +48,7 @@ export class RoutingProxy extends BaseProxy {
      * New route is inserted at the beginning of the list, and routes are matched in order
      * they added (first match wins).
      */
-    addRoute(hostRegexp: RegExp, upstream: UpstreamProxy | null, label: string = 'default') {
+    addRoute(hostRegexp: RegExp, upstream: ProxyUpstream | null, label: string = 'default') {
         this.routes.unshift({ label, hostRegexp, upstream });
     }
 
@@ -87,7 +88,7 @@ export class RoutingProxy extends BaseProxy {
 export interface ProxyRoute {
     label: string;
     hostRegexp: RegExp;
-    upstream: UpstreamProxy | null;
+    upstream: ProxyUpstream | null;
 }
 
 export interface SerializedProxyRoute {
@@ -96,5 +97,5 @@ export interface SerializedProxyRoute {
         source: string;
         flags: string;
     };
-    upstream: UpstreamProxy | null;
+    upstream: ProxyUpstream | null;
 }

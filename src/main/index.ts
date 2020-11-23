@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+export * from './commons';
 export * from './base-proxy';
 export * from './routing-proxy';
 export * from './proxy-agents';

@@ -38,7 +38,9 @@ describe('Routing Proxy', () => {
     describe('http', () => {
 
         it('routes foo.local to foo upstream', async () => {
-            const agent = new HttpProxyAgent('localhost', routingProxy.getServerPort());
+            const agent = new HttpProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            });
             const res = await fetch(`http://foo.local:${HTTP_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
@@ -49,7 +51,9 @@ describe('Routing Proxy', () => {
         });
 
         it('routes bar.local to bar upstream', async () => {
-            const agent = new HttpProxyAgent('localhost', routingProxy.getServerPort());
+            const agent = new HttpProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            });
             const res = await fetch(`http://bar.local:${HTTP_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
@@ -60,7 +64,9 @@ describe('Routing Proxy', () => {
         });
 
         it('routes unmatched requests directly', async () => {
-            const agent = new HttpProxyAgent('localhost', routingProxy.getServerPort());
+            const agent = new HttpProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            });
             const res = await fetch(`http://localhost:${HTTP_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
@@ -73,7 +79,9 @@ describe('Routing Proxy', () => {
     describe('https', () => {
 
         it('routes foo.local to foo upstream', async () => {
-            const agent = new HttpsProxyAgent('localhost', routingProxy.getServerPort(), { ca: certificate });
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            }, { ca: certificate });
             const res = await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');
@@ -84,7 +92,9 @@ describe('Routing Proxy', () => {
         });
 
         it('routes bar.local to bar upstream', async () => {
-            const agent = new HttpsProxyAgent('localhost', routingProxy.getServerPort(), { ca: certificate });
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            }, { ca: certificate });
             const res = await fetch(`https://bar.local:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');
@@ -95,7 +105,9 @@ describe('Routing Proxy', () => {
         });
 
         it('routes unmatched requests directly', async () => {
-            const agent = new HttpsProxyAgent('localhost', routingProxy.getServerPort(), { ca: certificate });
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            }, { ca: certificate });
             const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');

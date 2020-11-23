@@ -81,6 +81,7 @@ export class SslBumpProxy extends BaseProxy {
         const remoteSocket = net.connect(port, hostname);
         const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
         this.remoteConnectionsMap.set(host, tlsRemoteSocket);
+        // TODO when remote is closed, remove from map
         clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
 
         const brutaliskSocket = net.connect({

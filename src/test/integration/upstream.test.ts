@@ -24,7 +24,9 @@ describe('Upstream Proxy', () => {
         });
 
         it('sends requests through upstream proxy', async () => {
-            const agent = new HttpProxyAgent('localhost', upstreamProxy.getServerPort());
+            const agent = new HttpProxyAgent({
+                host: `localhost:${upstreamProxy.getServerPort()}`,
+            });
             const res = await fetch(`http://localhost:${HTTP_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
@@ -46,7 +48,9 @@ describe('Upstream Proxy', () => {
         });
 
         it('sends requests through upstream proxy', async () => {
-            const agent = new HttpsProxyAgent('localhost', upstreamProxy.getServerPort(), { ca: certificate });
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${upstreamProxy.getServerPort()}`,
+            }, { ca: certificate });
             const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');
