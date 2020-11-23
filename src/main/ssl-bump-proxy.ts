@@ -14,6 +14,9 @@
 
 import { BaseProxy } from './base-proxy';
 import { SslCertStore } from './ssl-cert-store';
+import http from 'http';
+import net from 'net';
+import tls from 'tls';
 
 /**
  * An SSL man-in-the-middle proxy which allows inspecting HTTPS traffic
@@ -50,14 +53,88 @@ import { SslCertStore } from './ssl-cert-store';
 export class SslBumpProxy extends BaseProxy {
 
     certStore: SslCertStore;
+    remoteConnectionsMap = new Map<string, net.Socket>();
 
     constructor(public config: SslBumpConfig) {
         super();
         this.certStore = new SslCertStore(config);
     }
 
-    matchRoute(host: string) {
+    getCACertificates() {
+        return [this.config.caCert, ...super.getCACertificates()];
+    }
+
+    // TODO make abstract (again)
+    matchRoute(_host: string) {
         return null;
+    }
+
+    // TODO handle errors at various stages
+    async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+        // req.url always contains hostname:port
+        const host = req.url ?? '';
+        const [hostname, _port] = host.split(':');
+        const port = Number(_port) || 443;
+        const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
+
+        // TODO this only handles direct connections atm, upstream proxies are not supported (yet)!
+        const remoteSocket = net.connect(port, hostname);
+        const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
+        this.remoteConnectionsMap.set(host, tlsRemoteSocket);
+        clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+
+        const brutaliskSocket = net.connect({
+            port: this.getServerPort(),
+            host: this.getServerAddress(),
+        });
+        tlsClientSocket.pipe(brutaliskSocket);
+        brutaliskSocket.pipe(tlsClientSocket);
+    }
+
+    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+        const host = req.headers.host ?? '';
+        // console.log('I RECEIVED THE REQUEST!!!11', req.url, host);
+        // TODO handle remoteSocket unavailable
+        const remoteSocket = this.remoteConnectionsMap.get(host)!;
+        // Forward:
+        const lines: string[] = [];
+        lines.push(`${req.method} ${req.url} HTTP/${req.httpVersion}`);
+        for (let i = 0; i < req.rawHeaders.length; i += 2) {
+            lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+        }
+        // console.log(lines.join('\r\n') + '\r\n');
+        remoteSocket.write(lines.join('\r\n') + '\r\n\r\n');
+        req.pipe(remoteSocket, { end: true });
+        remoteSocket.pipe((res as any).socket, { end: true });
+
+        // Dump the response right here:
+        // for await (const chunk of remoteSocket) {
+        //     console.log(chunk.toString());
+        // }
+
+        // Rewrite:
+        // res.writeHead(200, {
+        //     'content-type': 'text/plain',
+        // });
+        // res.end('PWNed bro');
+    }
+
+    protected async negotiateTls(remoteSocket: net.Socket, hostname: string, port: number) {
+        const tlsRemoteSocket = tls.connect({
+            socket: remoteSocket,
+            host: hostname,
+            port,
+            servername: hostname,
+            timeout: 60000,
+            ca: this.getCACertificates(),
+        }).setTimeout(60000, () => remoteSocket.end());
+        await new Promise(r => tlsRemoteSocket.once('secureConnect', r));
+        if (!tlsRemoteSocket.authorized) {
+            tlsRemoteSocket.end();
+            const error = new RemoteConnectionNotAuthorized(tlsRemoteSocket.authorizationError);
+            this.emit('error', error)
+        }
+        return tlsRemoteSocket;
     }
 
 }
@@ -92,4 +169,13 @@ export interface SslBumpConfig {
      * Maximum number of cached certificates stored in cache simultaneously.
      */
     certCacheMaxEntries: number;
+}
+
+export class RemoteConnectionNotAuthorized extends Error {
+    details: any;
+
+    constructor(cause: Error) {
+        super(`Remote connection not authorized: ${cause.message}`);
+        this.details = { cause: { ... cause } };
+    }
 }

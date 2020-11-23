@@ -102,6 +102,10 @@ export abstract class BaseProxy extends EventEmitter {
         return this.server != null;
     }
 
+    getServerAddress(): string {
+        return (this.server?.address() as net.AddressInfo)?.address ?? '';
+    }
+
     getServerPort(): number {
         return (this.server?.address() as net.AddressInfo)?.port ?? 0;
     }
