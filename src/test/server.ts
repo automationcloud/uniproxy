@@ -10,10 +10,11 @@ export const httpsServer = https.createServer({
 }, handler);
 
 function handler(req: http.IncomingMessage, res: http.ServerResponse) {
+    const isHttps = !!(req.connection as any).encrypted;
     res.writeHead(200, STATUS_CODES[200], {
         'content-type': 'text/plain'
     });
-    res.end(`You requested ${req.url}`);
+    res.end(`You requested ${req.url} over ${isHttps ? 'https' : 'http'}`);
 }
 
 export async function startServer(server: http.Server, port: number) {

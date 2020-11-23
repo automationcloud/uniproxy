@@ -6,7 +6,7 @@ import tls from 'tls';
 export class HttpsProxyAgent extends https.Agent {
     constructor(readonly hostname: string, readonly port: number, options: https.AgentOptions = {}) {
         super({
-            keepAlive: false,
+            keepAlive: true,
             timeout: 60000,
             ...options
         });
@@ -24,9 +24,8 @@ export class HttpsProxyAgent extends https.Agent {
         });
         connectReq.on('connect', (res: http.IncomingMessage, socket: net.Socket) => {
             if (res.statusCode !== 200) {
-                const err = new ProxyConnectionFailed(`proxy returned ${res.statusCode} ${res.statusMessage}`);
-                cb(err);
-                return;
+                const err = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`);
+                return cb(err);
             }
             const tlsSocket = tls.connect({
                 host: options.host,
@@ -35,6 +34,7 @@ export class HttpsProxyAgent extends https.Agent {
                 ALPNProtocols: ['http/1.1'],
                 ca: this.options.ca,
             });
+            tlsSocket.on('error', err => cb(err));
             cb(null, tlsSocket);
         });
         connectReq.on('error', (err: any) => cb(err));
@@ -45,7 +45,7 @@ export class HttpsProxyAgent extends https.Agent {
 export class HttpProxyAgent extends http.Agent {
     constructor(readonly hostname: string, readonly port: number, options: http.AgentOptions = {}) {
         super({
-            keepAlive: false,
+            keepAlive: true,
             timeout: 60000,
             ...options,
         });

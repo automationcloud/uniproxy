@@ -5,3 +5,8 @@ before(async () => {
     await startServer(httpServer, HTTP_PORT);
     await startServer(httpsServer, HTTPS_PORT);
 });
+
+after(async () => {
+    httpServer.close();
+    httpsServer.close();
+});

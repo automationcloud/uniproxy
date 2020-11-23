@@ -2,6 +2,7 @@ import { BaseProxy } from '../../main';
 import http from 'http';
 import net from 'net';
 import { UPSTREAM_PORT } from '../env';
+import { certificate } from '../certs';
 
 /**
  * A tiny proxy which acts as an upstream proxy (i.e. connects)
@@ -9,6 +10,10 @@ import { UPSTREAM_PORT } from '../env';
 export class UpstreamProxy extends BaseProxy {
     interceptedHttpRequest: http.IncomingMessage | null = null;
     interceptedConnectRequest: http.IncomingMessage | null = null;
+
+    getCACertificates() {
+        return [...super.getCACertificates(), certificate];
+    }
 
     async start() {
         super.start(UPSTREAM_PORT);

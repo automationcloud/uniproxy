@@ -191,11 +191,11 @@ export abstract class BaseProxy extends EventEmitter {
         connectReq.on('connect', (res: http.IncomingMessage, upstreamSocket: net.Socket) => {
             // TODO add logging when response is not 200
             upstreamSocket.on('error', (err: CustomError) => {
-                err.details = { initiator: 'httpsTunnelUpstreamSocket', ...err.details };
+                err.details = { initiator: 'httpsUpstreamRemote', ...err.details };
                 this.emit('error', err);
             });
             clientSocket.on('error', (err: CustomError) => {
-                err.details = { initiator: 'httpsTunnelClientSocket', ...err.details };
+                err.details = { initiator: 'httpsUpstreamClient', ...err.details };
                 this.emit('error', err);
             });
             clientSocket.write(`HTTP/${req.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n\r\n`);
@@ -227,18 +227,19 @@ export abstract class BaseProxy extends EventEmitter {
 
     protected handleSslDirect(req: http.IncomingMessage, clientSocket: net.Socket) {
         const url = new URL('https://' + req.url!);
-        const remoteSocket = net.connect(Number(url.port) || 443, url.hostname);
+        const port = Number(url.port) || 443;
+        const remoteSocket = net.connect(port, url.hostname);
         clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
         remoteSocket.on('error', (err: CustomError) => {
-            err.details = { initiator: 'httpsDirectRemoteSocket', ...err.details };
+            err.details = { initiator: 'httpsDirectRemote', ...err.details };
             this.emit('error', err);
         });
         clientSocket.on('error', (err: CustomError) => {
-            err.details = { initiator: 'httpsDirectClientSocket', ...err.details };
+            err.details = { initiator: 'httpsDirectClient', ...err.details };
             this.emit('error', err);
         });
-        remoteSocket.pipe(clientSocket);
-        clientSocket.pipe(remoteSocket);
+        remoteSocket.pipe(clientSocket, { end: false });
+        clientSocket.pipe(remoteSocket, { end: false });
     }
 
     protected makeAuthHeader(upstream: UpstreamProxy) {

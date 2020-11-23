@@ -14,7 +14,6 @@
 
 import { pki } from 'node-forge';
 import crypto from 'crypto';
-import { HTTPS_PORT } from './env';
 
 const hour = 60 * 60 * 1000;
 
@@ -56,8 +55,8 @@ cert.setExtensions([
     {
         name: 'subjectAltName',
         altNames: [
-            { type: 2, value: `localhost:${HTTPS_PORT}` },
-            { type: 2, value: `*.localhost:${HTTPS_PORT}` },
+            { type: 2, value: `localhost` },
+            { type: 2, value: `*.localhost` },
         ]
     }
 ]);
