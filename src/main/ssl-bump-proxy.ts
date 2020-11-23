@@ -14,9 +14,10 @@
 
 import { BaseProxy } from './base-proxy';
 import { SslCertStore } from './ssl-cert-store';
-import http from 'http';
+import http, { STATUS_CODES } from 'http';
 import net from 'net';
 import tls from 'tls';
+import { ProxyConfig } from './commons';
 
 /**
  * An SSL man-in-the-middle proxy which allows inspecting HTTPS traffic
@@ -60,36 +61,46 @@ export class SslBumpProxy extends BaseProxy {
         this.certStore = new SslCertStore(config);
     }
 
-    getCACertificates() {
-        return [this.config.caCert, ...super.getCACertificates()];
-    }
-
-    // TODO make abstract (again)
+    /**
+     * By default, all requests are routed directly. This can be overridden to provide more sophisticated routing.
+     */
     matchRoute(_host: string) {
         return null;
     }
 
+    getCACertificates() {
+        return [this.config.caCert, ...super.getCACertificates()];
+    }
+
     // TODO handle errors at various stages
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
-        // req.url always contains hostname:port
-        const host = req.url ?? '';
-        const [hostname, _port] = host.split(':');
-        const port = Number(_port) || 443;
-        const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
-
-        // TODO this only handles direct connections atm, downstream proxies are not supported (yet)!
-        const remoteSocket = net.connect(port, hostname);
-        const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
-        this.remoteConnectionsMap.set(host, tlsRemoteSocket);
-        // TODO when remote is closed, remove from map
-        clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-
-        const brutaliskSocket = net.connect({
-            port: this.getServerPort(),
-            host: this.getServerAddress(),
-        });
-        tlsClientSocket.pipe(brutaliskSocket);
-        brutaliskSocket.pipe(tlsClientSocket);
+        try {
+            // req.url always contains hostname:port
+            const targetHost = req.url ?? '';
+            const [hostname, _port] = targetHost.split(':');
+            const port = Number(_port) || 443;
+            const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
+            const downstream = this.matchRoute(targetHost);
+            const remoteSocket = await this.createSslConnection(targetHost, downstream);
+            const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
+            // Track remote sockets, because we'll need them in http handler
+            this.remoteConnectionsMap.set(targetHost, tlsRemoteSocket);
+            remoteSocket.once('close', () => this.remoteConnectionsMap.delete(targetHost));
+            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+            // Route decrypted traffic through internal HTTP server
+            const localHttpSocket = net.connect({
+                port: this.getServerPort(),
+                host: this.getServerAddress(),
+            });
+            tlsClientSocket.pipe(localHttpSocket);
+            localHttpSocket.pipe(tlsClientSocket);
+        } catch (error) {
+            this.emit('error', error);
+            const statusCode = (error as any).details?.statusCode ?? 502;
+            const statusText = STATUS_CODES[statusCode];
+            clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
+            clientSocket.end();
+        }
     }
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
