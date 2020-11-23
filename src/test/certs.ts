@@ -57,6 +57,8 @@ cert.setExtensions([
         altNames: [
             { type: 2, value: `localhost` },
             { type: 2, value: `*.localhost` },
+            { type: 2, value: `foo.local` },
+            { type: 2, value: `bar.local` },
         ]
     }
 ]);

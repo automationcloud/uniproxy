@@ -98,6 +98,10 @@ export abstract class BaseProxy extends EventEmitter {
         return this.server != null;
     }
 
+    getServerPort(): number {
+        return (this.server?.address() as net.AddressInfo)?.port ?? 0;
+    }
+
     /**
      * Forcibly closes established client connections.
      *
@@ -122,7 +126,8 @@ export abstract class BaseProxy extends EventEmitter {
     // HTTP
 
     protected onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-        const upstream = this.matchRoute(req.url!);
+        const { host } = new URL(req.url!);
+        const upstream = this.matchRoute(host);
         const fwdReq = upstream ? this.createUpstreamHttpRequest(req, upstream) : this.createDirectHttpRequest(req);
         fwdReq.on('error', (err: CustomError) => {
             err.details = { initiator: 'httpForwardedRequest', ...err.details };
