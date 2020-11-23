@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { BaseProxy } from './base-proxy';
-import { ProxyUpstream } from './commons';
+import { ProxyConfig } from './commons';
 
 /**
  * Proxy with dynamically configurable routing based on hostnames.
@@ -26,10 +26,10 @@ import { ProxyUpstream } from './commons';
 export class RoutingProxy extends BaseProxy {
     protected routes: ProxyRoute[] = [];
 
-    matchRoute(host: string): ProxyUpstream | null {
+    matchRoute(host: string): ProxyConfig | null {
         for (const route of this.routes) {
             if (route.hostRegexp.test(host)) {
-                return route.upstream;
+                return route.proxy;
             }
         }
         return null;
@@ -44,12 +44,12 @@ export class RoutingProxy extends BaseProxy {
 
     /**
      * Inserts new route. Requests matching specified `hostRegexp` will be routed
-     * to specified `upstream`.
+     * to specified `proxy`.
      * New route is inserted at the beginning of the list, and routes are matched in order
      * they added (first match wins).
      */
-    addRoute(hostRegexp: RegExp, upstream: ProxyUpstream | null, label: string = 'default') {
-        this.routes.unshift({ label, hostRegexp, upstream });
+    addRoute(hostRegexp: RegExp, proxy: ProxyConfig | null, label: string = 'default') {
+        this.routes.unshift({ label, hostRegexp, proxy });
     }
 
     /**
@@ -69,7 +69,7 @@ export class RoutingProxy extends BaseProxy {
                     source: _.hostRegexp.source,
                     flags: _.hostRegexp.flags,
                 },
-                upstream: _.upstream,
+                proxy: _.proxy,
             };
         });
     }
@@ -79,7 +79,7 @@ export class RoutingProxy extends BaseProxy {
             return {
                 label: sr.label,
                 hostRegexp: new RegExp(sr.hostRegexp.source, sr.hostRegexp.flags),
-                upstream: sr.upstream,
+                proxy: sr.proxy,
             };
         });
     }
@@ -88,7 +88,7 @@ export class RoutingProxy extends BaseProxy {
 export interface ProxyRoute {
     label: string;
     hostRegexp: RegExp;
-    upstream: ProxyUpstream | null;
+    proxy: ProxyConfig | null;
 }
 
 export interface SerializedProxyRoute {
@@ -97,5 +97,5 @@ export interface SerializedProxyRoute {
         source: string;
         flags: string;
     };
-    upstream: ProxyUpstream | null;
+    proxy: ProxyConfig | null;
 }

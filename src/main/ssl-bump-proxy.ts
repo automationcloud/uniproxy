@@ -77,7 +77,7 @@ export class SslBumpProxy extends BaseProxy {
         const port = Number(_port) || 443;
         const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
 
-        // TODO this only handles direct connections atm, upstream proxies are not supported (yet)!
+        // TODO this only handles direct connections atm, downstream proxies are not supported (yet)!
         const remoteSocket = net.connect(port, hostname);
         const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
         this.remoteConnectionsMap.set(host, tlsRemoteSocket);

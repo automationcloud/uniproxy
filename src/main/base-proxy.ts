@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import http from 'http';
+import http, { STATUS_CODES } from 'http';
 import https from 'https';
 import net from 'net';
 import tls from 'tls';
 import { EventEmitter } from 'events';
-import { makeBasicAuthHeader, ProxyUpstream } from './commons';
+import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commons';
 
 /**
  * Base class for implementing proxies.
  *
  * This class features an HTTP server accepting both HTTP and HTTPS incoming traffic,
  * and routing such traffic either to a target destination (i.e. the website),
- * or to the next proxy in chain (aka "upstream" proxy).
+ * or to the next proxy in chain (aka "downstream" proxy).
  */
 export abstract class BaseProxy extends EventEmitter {
     protected server: http.Server | null = null;
@@ -41,10 +41,10 @@ export abstract class BaseProxy extends EventEmitter {
      * or from HTTP request handler (for non-SSL proxying), prior to establishing the onward connection.
      *
      * If the method returns `null` the direct connection is established to the target `host`;
-     * otherwise the returned upstream information is used to establish an onward connection
-     * to the upstream proxy.
+     * otherwise the returned downstream information is used to establish an onward connection
+     * to the downstream proxy.
      */
-    abstract matchRoute(host: string): ProxyUpstream | null;
+    abstract matchRoute(host: string): ProxyConfig | null;
 
     /**
      * Returns the list of CA certificates chain to use when issuing HTTPS requests.
@@ -136,8 +136,8 @@ export abstract class BaseProxy extends EventEmitter {
 
     protected onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         const { host } = new URL(req.url!);
-        const upstream = this.matchRoute(host);
-        const fwdReq = upstream ? this.createUpstreamHttpRequest(req, upstream) : this.createDirectHttpRequest(req);
+        const downstream = this.matchRoute(host);
+        const fwdReq = downstream ? this.createProxyHttpRequest(req, downstream) : this.createDirectHttpRequest(req);
         fwdReq.on('error', (err: CustomError) => {
             err.details = { initiator: 'httpForwardedRequest', ...err.details };
             this.emit('error', err);
@@ -153,8 +153,8 @@ export abstract class BaseProxy extends EventEmitter {
         req.pipe(fwdReq);
     }
 
-    protected createUpstreamHttpRequest(req: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
-        const [hostname, port] = upstream.host.split(':');
+    protected createProxyHttpRequest(req: http.IncomingMessage, downstream: ProxyConfig): http.ClientRequest {
+        const [hostname, port] = downstream.host.split(':');
         const options = {
             hostname,
             port,
@@ -162,11 +162,11 @@ export abstract class BaseProxy extends EventEmitter {
             method: req.method,
             headers: req.headers,
         };
-        const fwdReq = upstream.useHttps ?
+        const fwdReq = downstream.useHttps ?
             https.request({ ...options, ca: this.getCACertificates() }) :
             http.request(options);
-        if (upstream.username || upstream.password) {
-            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
+        if (downstream.username || downstream.password) {
+            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(downstream));
         }
         return fwdReq;
     }
@@ -184,76 +184,78 @@ export abstract class BaseProxy extends EventEmitter {
 
     // HTTPS
 
-    protected onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
-        // Note: req.url contains Host (includes hostname and port)
-        const upstream = this.matchRoute(req.url ?? '');
-        if (upstream) {
-            this.handleSslUpstream(req, clientSocket, upstream);
-        } else {
-            this.handleSslDirect(req, clientSocket);
+    protected async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+        try {
+            // Note: CONNECT request's url always contains Host (hostname:port)
+            const host = req.url ?? '';
+            const downstream = this.matchRoute(host);
+            const remoteSocket = downstream ?
+                await this.createSslProxyConnection(host, downstream) :
+                await this.createSslDirectConnection(host);
+            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+            remoteSocket.pipe(clientSocket);
+            clientSocket.pipe(remoteSocket);
+        } catch (error) {
+            this.emit('error', error);
+            const statusCode = (error as any).details?.statusCode ?? 502;
+            const statusText = STATUS_CODES[statusCode];
+            clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
+            clientSocket.end();
         }
     }
 
-    protected handleSslUpstream(req: http.IncomingMessage, clientSocket: net.Socket, upstream: ProxyUpstream) {
-        const connectReq = this.createUpstreamConnectReq(req, upstream);
-        connectReq.on('error', (err: CustomError) => {
-            // TODO check if this is ever invoked
-            err.details = { initiator: 'httpsConnectRequest', ...err.details };
-            this.emit('error', err);
-            clientSocket.end();
-        });
-        connectReq.on('connect', (res: http.IncomingMessage, upstreamSocket: net.Socket) => {
-            // TODO add logging when response is not 200
-            upstreamSocket.on('error', (err: CustomError) => {
-                err.details = { initiator: 'httpsUpstreamRemote', ...err.details };
-                this.emit('error', err);
+    /**
+     * Creates a connection to `targetHost` using specified `downstream` proxy.
+     */
+    async createSslProxyConnection(targetHost: string, downstream: ProxyConfig): Promise<net.Socket> {
+        return new Promise((resolve, reject) => {
+            const connectReq = this.createDownstreamConnectReq(targetHost, downstream);
+            connectReq.on('error', reject);
+            connectReq.on('connect', (res: http.IncomingMessage, remoteSocket: net.Socket) => {
+                if ((res.statusCode || 599) >= 400) {
+                    const error = new ProxyConnectionFailed(`proxy returned ${res.statusCode}`, {
+                        proxy: downstream,
+                        statusCode: res.statusCode
+                    });
+                    reject(error);
+                }
+                resolve(remoteSocket);
             });
-            clientSocket.on('error', (err: CustomError) => {
-                err.details = { initiator: 'httpsUpstreamClient', ...err.details };
-                this.emit('error', err);
-            });
-            clientSocket.write(`HTTP/${req.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n\r\n`);
-            upstreamSocket.pipe(clientSocket);
-            clientSocket.pipe(upstreamSocket);
+            connectReq.end();
         });
-        connectReq.end();
     }
 
-    protected createUpstreamConnectReq(req: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
-        const { useHttps = true } = upstream;
-        const [hostname, port] = upstream.host.split(':');
+    /**
+     * Creates a connection to `targetHost` directly (without proxy).
+     */
+    async createSslDirectConnection(targetHost: string): Promise<net.Socket> {
+        return new Promise((resolve, reject) => {
+            const url = new URL('https://' + targetHost);
+            const port = Number(url.port) || 443;
+            const remoteSocket = net.connect(port, url.hostname);
+            remoteSocket.once('error', reject);
+            remoteSocket.once('connect', () => resolve(remoteSocket));
+        });
+    }
+
+    protected createDownstreamConnectReq(targetHost: string, downstream: ProxyConfig): http.ClientRequest {
+        const { useHttps = true } = downstream;
+        const [hostname, port] = downstream.host.split(':');
         const request = useHttps ? https.request : http.request;
         const connectReq = request({
             hostname,
             port,
-            path: req.url,
+            path: targetHost,
             method: 'CONNECT',
-            headers: req.headers,
+            headers: { host: targetHost },
             timeout: 10000,
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
         } as any);
-        if (upstream.username || upstream.password) {
-            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
+        if (downstream.username || downstream.password) {
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(downstream));
         }
         return connectReq;
-    }
-
-    protected handleSslDirect(req: http.IncomingMessage, clientSocket: net.Socket) {
-        const url = new URL('https://' + req.url!);
-        const port = Number(url.port) || 443;
-        const remoteSocket = net.connect(port, url.hostname);
-        clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-        remoteSocket.on('error', (err: CustomError) => {
-            err.details = { initiator: 'httpsDirectRemote', ...err.details };
-            this.emit('error', err);
-        });
-        clientSocket.on('error', (err: CustomError) => {
-            err.details = { initiator: 'httpsDirectClient', ...err.details };
-            this.emit('error', err);
-        });
-        remoteSocket.pipe(clientSocket, { end: false });
-        clientSocket.pipe(remoteSocket, { end: false });
     }
 
 }

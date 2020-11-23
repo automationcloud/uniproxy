@@ -16,14 +16,14 @@ import http from 'http';
 import https from 'https';
 import net from 'net';
 import tls from 'tls';
-import { makeBasicAuthHeader, ProxyUpstream } from './commons';
+import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commons';
 
 /**
  * Quick-and-simple agent for issuing HTTPS requests via a proxy.
  */
 export class HttpsProxyAgent extends https.Agent {
     constructor(
-        readonly upstream: ProxyUpstream,
+        readonly proxy: ProxyConfig,
         options: https.AgentOptions = {}
     ) {
         super({
@@ -34,7 +34,7 @@ export class HttpsProxyAgent extends https.Agent {
     }
 
     createConnection(options: any, cb: (err: Error | null, socket?: net.Socket) => void) {
-        const [hostname, port] = this.upstream.host.split(':');
+        const [hostname, port] = this.proxy.host.split(':');
         const connectReq = http.request({
             method: 'connect',
             hostname,
@@ -44,12 +44,15 @@ export class HttpsProxyAgent extends https.Agent {
                 host: options.host,
             },
         });
-        if (this.upstream.username || this.upstream.password) {
-            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.upstream));
+        if (this.proxy.username || this.proxy.password) {
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.proxy));
         }
         connectReq.on('connect', (res: http.IncomingMessage, socket: net.Socket) => {
             if (res.statusCode !== 200) {
-                const err = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`);
+                const err = new ProxyConnectionFailed(`Server returned ${res.statusCode} ${res.statusMessage}`, {
+                    proxy: this.proxy,
+                    statusCode: res.statusCode,
+                });
                 return cb(err);
             }
             const tlsSocket = tls.connect({
@@ -74,7 +77,7 @@ export class HttpsProxyAgent extends https.Agent {
  */
 export class HttpProxyAgent extends http.Agent {
     constructor(
-        readonly upstream: ProxyUpstream,
+        readonly proxy: ProxyConfig,
         options: http.AgentOptions = {}
     ) {
         super({
@@ -88,24 +91,18 @@ export class HttpProxyAgent extends http.Agent {
         req.shouldKeepAlive = false;
         (req as any).path = options.href;
         const socket = this.createConnection(options);
-        if (this.upstream.username || this.upstream.password) {
-            req.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.upstream));
+        if (this.proxy.username || this.proxy.password) {
+            req.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.proxy));
         }
         req.onSocket(socket);
     }
 
     createConnection(_options: any) {
-        const [hostname, port] = this.upstream.host.split(':');
+        const [hostname, port] = this.proxy.host.split(':');
         const socket = net.createConnection({
             host: hostname,
             port: Number(port) || 80,
         });
         return socket;
-    }
-}
-
-export class ProxyConnectionFailed extends Error {
-    constructor(reason: string) {
-        super(`Proxy connection failed: ${reason}`);
     }
 }

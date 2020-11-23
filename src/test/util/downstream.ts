@@ -4,9 +4,9 @@ import net from 'net';
 import { certificate } from '../certs';
 
 /**
- * A tiny proxy which acts as an upstream proxy (i.e. connects directly to destination).
+ * A tiny proxy which acts as an intermediate downstream proxy (i.e. connects directly to destination).
  */
-export class UpstreamProxy extends BaseProxy {
+export class DownstreamProxy extends BaseProxy {
     interceptedHttpRequest: http.IncomingMessage | null = null;
     interceptedConnectRequest: http.IncomingMessage | null = null;
 
@@ -23,9 +23,9 @@ export class UpstreamProxy extends BaseProxy {
         return null;
     }
 
-    onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+    async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         this.interceptedConnectRequest = req;
-        super.onConnect(req, clientSocket);
+        await super.onConnect(req, clientSocket);
     }
 
     onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
