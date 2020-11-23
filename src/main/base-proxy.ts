@@ -187,11 +187,9 @@ export abstract class BaseProxy extends EventEmitter {
     protected async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             // Note: CONNECT request's url always contains Host (hostname:port)
-            const host = req.url ?? '';
-            const downstream = this.matchRoute(host);
-            const remoteSocket = downstream ?
-                await this.createSslProxyConnection(host, downstream) :
-                await this.createSslDirectConnection(host);
+            const targetHost = req.url ?? '';
+            const downstream = this.matchRoute(targetHost);
+            const remoteSocket = await this.createSslConnection(targetHost, downstream);
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
             remoteSocket.pipe(clientSocket);
             clientSocket.pipe(remoteSocket);
@@ -205,16 +203,24 @@ export abstract class BaseProxy extends EventEmitter {
     }
 
     /**
+     * Creates an onward connection to `targetHost` either directly or via downstream `proxy`.
+     */
+    async createSslConnection(targetHost: string, proxy: ProxyConfig | null) {
+        return proxy ? await this.createSslProxyConnection(targetHost, proxy) :
+            await this.createSslDirectConnection(targetHost)
+    }
+
+    /**
      * Creates a connection to `targetHost` using specified `downstream` proxy.
      */
-    async createSslProxyConnection(targetHost: string, downstream: ProxyConfig): Promise<net.Socket> {
+    protected async createSslProxyConnection(targetHost: string, proxy: ProxyConfig): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
-            const connectReq = this.createDownstreamConnectReq(targetHost, downstream);
+            const connectReq = this.createDownstreamConnectReq(targetHost, proxy);
             connectReq.on('error', reject);
             connectReq.on('connect', (res: http.IncomingMessage, remoteSocket: net.Socket) => {
                 if ((res.statusCode || 599) >= 400) {
-                    const error = new ProxyConnectionFailed(`proxy returned ${res.statusCode}`, {
-                        proxy: downstream,
+                    const error = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`, {
+                        proxy,
                         statusCode: res.statusCode
                     });
                     reject(error);
@@ -228,7 +234,7 @@ export abstract class BaseProxy extends EventEmitter {
     /**
      * Creates a connection to `targetHost` directly (without proxy).
      */
-    async createSslDirectConnection(targetHost: string): Promise<net.Socket> {
+    protected async createSslDirectConnection(targetHost: string): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
             const url = new URL('https://' + targetHost);
             const port = Number(url.port) || 443;
@@ -238,9 +244,9 @@ export abstract class BaseProxy extends EventEmitter {
         });
     }
 
-    protected createDownstreamConnectReq(targetHost: string, downstream: ProxyConfig): http.ClientRequest {
-        const { useHttps = true } = downstream;
-        const [hostname, port] = downstream.host.split(':');
+    protected createDownstreamConnectReq(targetHost: string, proxy: ProxyConfig): http.ClientRequest {
+        const { useHttps = true } = proxy;
+        const [hostname, port] = proxy.host.split(':');
         const request = useHttps ? https.request : http.request;
         const connectReq = request({
             hostname,
@@ -252,8 +258,8 @@ export abstract class BaseProxy extends EventEmitter {
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
         } as any);
-        if (downstream.username || downstream.password) {
-            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(downstream));
+        if (proxy.username || proxy.password) {
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(proxy));
         }
         return connectReq;
     }

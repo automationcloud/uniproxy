@@ -49,7 +49,7 @@ export class HttpsProxyAgent extends https.Agent {
         }
         connectReq.on('connect', (res: http.IncomingMessage, socket: net.Socket) => {
             if (res.statusCode !== 200) {
-                const err = new ProxyConnectionFailed(`Server returned ${res.statusCode} ${res.statusMessage}`, {
+                const err = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`, {
                     proxy: this.proxy,
                     statusCode: res.statusCode,
                 });
