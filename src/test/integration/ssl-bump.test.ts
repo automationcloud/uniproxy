@@ -6,20 +6,21 @@ import assert from 'assert';
 
 describe('SSL Bumping', () => {
 
+    const sslBumpProxy = new SslBumpProxy({
+        // Note: we use same keys and certs for testing, but in reality those should be different!
+        caCert: certificate,
+        caPrivateKey: privateKey,
+        certPrivateKey: privateKey,
+        certPublicKey: publicKey,
+        certCacheMaxEntries: 100,
+        certTtlDays: 365,
+    });
+    beforeEach(() => sslBumpProxy.start(0));
+    afterEach(() => sslBumpProxy.shutdown());
+
     describe('direct connections', () => {
 
-        const sslBumpProxy = new SslBumpProxy({
-            // Note: we use same keys and certs for testing, but in reality those should be different!
-            caCert: certificate,
-            caPrivateKey: privateKey,
-            certPrivateKey: privateKey,
-            certPublicKey: publicKey,
-            certCacheMaxEntries: 100,
-            certTtlDays: 365,
-        });
-
-        beforeEach(() => sslBumpProxy.start(0));
-        afterEach(() => sslBumpProxy.shutdown());
+        beforeEach(() => sslBumpProxy.upstreamProxy = null);
 
         it('works', async () => {
             const agent = new HttpsProxyAgent({

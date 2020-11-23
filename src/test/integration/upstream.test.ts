@@ -2,17 +2,17 @@ import { HttpProxyAgent, HttpsProxyAgent } from '../../main';
 import fetch from 'node-fetch';
 import { HTTP_PORT, HTTPS_PORT } from '../env';
 import assert from 'assert';
-import { DownstreamProxy } from '../util/downstream';
+import { UpstreamProxy } from '../util/upstream';
 import https from 'https';
 import { certificate } from '../certs';
 
-describe('Downstream Proxy', () => {
+describe('Upstream Proxy', () => {
 
-    const downstreamProxy = new DownstreamProxy();
+    const upstreamProxy = new UpstreamProxy();
 
-    beforeEach(() => downstreamProxy.start(0));
-    beforeEach(() => downstreamProxy.reset());
-    afterEach(() => downstreamProxy.shutdown(true));
+    beforeEach(() => upstreamProxy.start(0));
+    beforeEach(() => upstreamProxy.reset());
+    afterEach(() => upstreamProxy.shutdown(true));
 
     describe('http', () => {
 
@@ -20,18 +20,18 @@ describe('Downstream Proxy', () => {
             const res = await fetch(`http://localhost:${HTTP_PORT}/foo`);
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
-            assert(downstreamProxy.interceptedHttpRequest == null);
+            assert(upstreamProxy.interceptedHttpRequest == null);
         });
 
         it('sends requests through upstream proxy', async () => {
             const agent = new HttpProxyAgent({
-                host: `localhost:${downstreamProxy.getServerPort()}`,
+                host: `localhost:${upstreamProxy.getServerPort()}`,
             });
             const res = await fetch(`http://localhost:${HTTP_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over http');
-            assert.ok(downstreamProxy.interceptedHttpRequest);
-            assert.strictEqual(downstreamProxy.interceptedHttpRequest?.url,
+            assert.ok(upstreamProxy.interceptedHttpRequest);
+            assert.strictEqual(upstreamProxy.interceptedHttpRequest?.url,
                 `http://localhost:${HTTP_PORT}/foo`);
         });
 
@@ -44,18 +44,18 @@ describe('Downstream Proxy', () => {
             const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');
-            assert(downstreamProxy.interceptedHttpRequest == null);
+            assert(upstreamProxy.interceptedHttpRequest == null);
         });
 
         it('sends requests through upstream proxy', async () => {
             const agent = new HttpsProxyAgent({
-                host: `localhost:${downstreamProxy.getServerPort()}`,
+                host: `localhost:${upstreamProxy.getServerPort()}`,
             }, { ca: certificate });
             const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'You requested /foo over https');
-            assert.ok(downstreamProxy.interceptedConnectRequest);
-            assert.strictEqual(downstreamProxy.interceptedConnectRequest?.url,
+            assert.ok(upstreamProxy.interceptedConnectRequest);
+            assert.strictEqual(upstreamProxy.interceptedConnectRequest?.url,
                 `localhost:${HTTPS_PORT}`);
         });
 

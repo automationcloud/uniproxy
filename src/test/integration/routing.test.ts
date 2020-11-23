@@ -1,21 +1,21 @@
 import { HttpProxyAgent, HttpsProxyAgent, RoutingProxy } from '../../main';
 import { HTTPS_PORT, HTTP_PORT } from '../env';
-import { DownstreamProxy } from '../util/downstream';
+import { UpstreamProxy } from '../util/upstream';
 import fetch from 'node-fetch';
 import assert from 'assert';
 import { certificate } from '../certs';
 
 describe('Routing Proxy', () => {
 
-    // Create two different downstream proxies for foo.local and bar.local —
+    // Create two different upstream proxies for foo.local and bar.local —
     // and one router proxy in front of them
 
-    const fooProxy = new DownstreamProxy();
+    const fooProxy = new UpstreamProxy();
     beforeEach(() => fooProxy.start(0));
     beforeEach(() => fooProxy.reset());
     afterEach(() => fooProxy.shutdown(true));
 
-    const barProxy = new DownstreamProxy();
+    const barProxy = new UpstreamProxy();
     beforeEach(() => barProxy.start(0));
     beforeEach(() => barProxy.reset());
     afterEach(() => barProxy.shutdown(true));
@@ -37,7 +37,7 @@ describe('Routing Proxy', () => {
 
     describe('http', () => {
 
-        it('routes foo.local to foo downstream', async () => {
+        it('routes foo.local to foo upstream', async () => {
             const agent = new HttpProxyAgent({
                 host: `localhost:${routingProxy.getServerPort()}`,
             });
@@ -50,7 +50,7 @@ describe('Routing Proxy', () => {
             assert(barProxy.interceptedHttpRequest == null);
         });
 
-        it('routes bar.local to bar downstream', async () => {
+        it('routes bar.local to bar upstream', async () => {
             const agent = new HttpProxyAgent({
                 host: `localhost:${routingProxy.getServerPort()}`,
             });
@@ -78,7 +78,7 @@ describe('Routing Proxy', () => {
 
     describe('https', () => {
 
-        it('routes foo.local to foo downstream', async () => {
+        it('routes foo.local to foo upstream', async () => {
             const agent = new HttpsProxyAgent({
                 host: `localhost:${routingProxy.getServerPort()}`,
             }, { ca: certificate });
@@ -91,7 +91,7 @@ describe('Routing Proxy', () => {
             assert(barProxy.interceptedConnectRequest == null);
         });
 
-        it('routes bar.local to bar downstream', async () => {
+        it('routes bar.local to bar upstream', async () => {
             const agent = new HttpsProxyAgent({
                 host: `localhost:${routingProxy.getServerPort()}`,
             }, { ca: certificate });

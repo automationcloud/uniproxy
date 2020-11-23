@@ -6,7 +6,7 @@ import { certificate } from '../certs';
 /**
  * A tiny proxy which acts as an intermediate downstream proxy (i.e. connects directly to destination).
  */
-export class DownstreamProxy extends BaseProxy {
+export class UpstreamProxy extends BaseProxy {
     interceptedHttpRequest: http.IncomingMessage | null = null;
     interceptedConnectRequest: http.IncomingMessage | null = null;
 
@@ -17,10 +17,6 @@ export class DownstreamProxy extends BaseProxy {
     reset() {
         this.interceptedHttpRequest = null;
         this.interceptedConnectRequest = null;
-    }
-
-    matchRoute(_host: string) {
-        return null;
     }
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
