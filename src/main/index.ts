@@ -15,3 +15,5 @@
 export * from './base-proxy';
 export * from './routing-proxy';
 export * from './proxy-agents';
+export * from './ssl-cert-store';
+export * from './ssl-bump-proxy';

@@ -17,8 +17,17 @@ import https from 'https';
 import net from 'net';
 import tls from 'tls';
 
+/**
+ * Quick-and-simple agent for issuing HTTPS requests via a proxy.
+ *
+ * Note: ProxyAuthorization is currently not supported.
+ */
 export class HttpsProxyAgent extends https.Agent {
-    constructor(readonly hostname: string, readonly port: number, options: https.AgentOptions = {}) {
+    constructor(
+        readonly proxyHostname: string,
+        readonly proxyPort: number,
+        options: https.AgentOptions = {}
+    ) {
         super({
             keepAlive: true,
             timeout: 60000,
@@ -29,8 +38,8 @@ export class HttpsProxyAgent extends https.Agent {
     createConnection(options: any, cb: (err: Error | null, socket?: net.Socket) => void) {
         const connectReq = http.request({
             method: 'connect',
-            hostname: this.hostname,
-            port: this.port,
+            hostname: this.proxyHostname,
+            port: this.proxyPort,
             path: [options.host, options.port].join(':'),
             headers: {
                 host: options.host,
@@ -56,8 +65,17 @@ export class HttpsProxyAgent extends https.Agent {
     }
 }
 
+/**
+ * Quick-and-simple agent for issuing HTTP requests via a proxy.
+ *
+ * Note: ProxyAuthorization is currently not supported.
+ */
 export class HttpProxyAgent extends http.Agent {
-    constructor(readonly hostname: string, readonly port: number, options: http.AgentOptions = {}) {
+    constructor(
+        readonly proxyHostname: string,
+        readonly proxyPort: number,
+        options: http.AgentOptions = {}
+    ) {
         super({
             keepAlive: true,
             timeout: 60000,
@@ -74,8 +92,8 @@ export class HttpProxyAgent extends http.Agent {
 
     createConnection(_options: any) {
         const socket = net.createConnection({
-            host: this.hostname,
-            port: this.port,
+            host: this.proxyHostname,
+            port: this.proxyPort,
         });
         return socket;
     }

@@ -29,6 +29,10 @@ export abstract class BaseProxy extends EventEmitter {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
 
+    constructor() {
+        super();
+    }
+
     /**
      * The hook for implementing routing logic per connection.
      *
