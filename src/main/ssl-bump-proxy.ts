@@ -17,7 +17,6 @@ import { SslCertStore } from './ssl-cert-store';
 import http, { STATUS_CODES } from 'http';
 import net from 'net';
 import tls from 'tls';
-import { ProxyConfig } from './commons';
 
 /**
  * An SSL man-in-the-middle proxy which allows inspecting HTTPS traffic
@@ -61,18 +60,10 @@ export class SslBumpProxy extends BaseProxy {
         this.certStore = new SslCertStore(config);
     }
 
-    /**
-     * By default, all requests are routed directly. This can be overridden to provide more sophisticated routing.
-     */
-    matchRoute(_host: string) {
-        return null;
-    }
-
     getCACertificates() {
         return [this.config.caCert, ...super.getCACertificates()];
     }
 
-    // TODO handle errors at various stages
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             // req.url always contains hostname:port
@@ -92,8 +83,9 @@ export class SslBumpProxy extends BaseProxy {
                 port: this.getServerPort(),
                 host: this.getServerAddress(),
             });
-            tlsClientSocket.pipe(localHttpSocket);
-            localHttpSocket.pipe(tlsClientSocket);
+            const end = req.headers?.connection === 'close';
+            tlsClientSocket.pipe(localHttpSocket, { end });
+            localHttpSocket.pipe(tlsClientSocket, { end });
         } catch (error) {
             this.emit('error', error);
             const statusCode = (error as any).details?.statusCode ?? 502;

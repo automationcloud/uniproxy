@@ -26,9 +26,11 @@ import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commo
  * and routing such traffic either to a target destination (i.e. the website),
  * or to the next proxy in chain (aka "downstream" proxy).
  */
-export abstract class BaseProxy extends EventEmitter {
+export class BaseProxy extends EventEmitter {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
+
+    downstreamProxy: ProxyConfig | null = null;
 
     constructor() {
         super();
@@ -43,8 +45,12 @@ export abstract class BaseProxy extends EventEmitter {
      * If the method returns `null` the direct connection is established to the target `host`;
      * otherwise the returned downstream information is used to establish an onward connection
      * to the downstream proxy.
+     *
+     * By default, it returns a `downstreamProxy` all the time.
      */
-    abstract matchRoute(host: string): ProxyConfig | null;
+    matchRoute(_host: string): ProxyConfig | null {
+        return this.downstreamProxy;
+    }
 
     /**
      * Returns the list of CA certificates chain to use when issuing HTTPS requests.
@@ -134,23 +140,25 @@ export abstract class BaseProxy extends EventEmitter {
 
     // HTTP
 
-    protected onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-        const { host } = new URL(req.url!);
-        const downstream = this.matchRoute(host);
-        const fwdReq = downstream ? this.createProxyHttpRequest(req, downstream) : this.createDirectHttpRequest(req);
-        fwdReq.on('error', (err: CustomError) => {
-            err.details = { initiator: 'httpForwardedRequest', ...err.details };
-            this.emit('error', err);
+    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+        try {
+            const { host } = new URL(req.url!);
+            const downstream = this.matchRoute(host);
+            const fwdReq = downstream ?
+                this.createProxyHttpRequest(req, downstream) :
+                this.createDirectHttpRequest(req);
+            req.pipe(fwdReq);
+            const fwdRes = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                fwdReq.once('error', reject);
+                fwdReq.once('response', fwdRes => resolve(fwdRes));
+            });
+            res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
+            fwdRes.pipe(res);
+        } catch (error) {
+            this.emit('error', error);
             res.writeHead(599);
             res.end();
-        });
-        fwdReq.on('response', fwdRes => {
-            if (fwdRes.statusCode != null) {
-                res.writeHead(fwdRes.statusCode, fwdRes.headers);
-                fwdRes.pipe(res);
-            }
-        });
-        req.pipe(fwdReq);
+        }
     }
 
     protected createProxyHttpRequest(req: http.IncomingMessage, downstream: ProxyConfig): http.ClientRequest {
@@ -184,7 +192,7 @@ export abstract class BaseProxy extends EventEmitter {
 
     // HTTPS
 
-    protected async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+    async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             // Note: CONNECT request's url always contains Host (hostname:port)
             const targetHost = req.url ?? '';
@@ -264,8 +272,4 @@ export abstract class BaseProxy extends EventEmitter {
         return connectReq;
     }
 
-}
-
-interface CustomError {
-    details: any;
 }

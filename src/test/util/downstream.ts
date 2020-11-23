@@ -28,8 +28,8 @@ export class DownstreamProxy extends BaseProxy {
         await super.onConnect(req, clientSocket);
     }
 
-    onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         this.interceptedHttpRequest = req;
-        super.onRequest(req, res);
+        await super.onRequest(req, res);
     }
 }
