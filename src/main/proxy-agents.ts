@@ -27,7 +27,7 @@ export class HttpsProxyAgent extends https.Agent {
         options: https.AgentOptions = {}
     ) {
         super({
-            keepAlive: true,
+            keepAlive: false,
             timeout: 60000,
             ...options
         });
@@ -81,7 +81,7 @@ export class HttpProxyAgent extends http.Agent {
         options: http.AgentOptions = {}
     ) {
         super({
-            keepAlive: true,
+            keepAlive: false,
             timeout: 60000,
             ...options,
         });

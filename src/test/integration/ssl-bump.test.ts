@@ -26,10 +26,12 @@ describe('SSL Bumping', () => {
             const agent = new HttpsProxyAgent({
                 host: `localhost:${sslBumpProxy.getServerPort()}`
             }, { ca: certificate });
-            const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
-            const text = await res.text();
-            // eslint-disable-next-line no-console
-            console.log(text);
+            const res1 = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
+            const text1 = await res1.text();
+            console.log(text1);
+            const res2 = await fetch(`https://localhost:${HTTPS_PORT}/bar`, { agent });
+            const text2 = await res2.text();
+            console.log(text2);
         });
 
     });

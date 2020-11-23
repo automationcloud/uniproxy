@@ -17,7 +17,11 @@ import https from 'https';
 import net from 'net';
 import tls from 'tls';
 import { EventEmitter } from 'events';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
 import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commons';
+
+const pipelineAsync = promisify(pipeline);
 
 /**
  * Base class for implementing proxies.
@@ -199,8 +203,10 @@ export class BaseProxy extends EventEmitter {
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            remoteSocket.pipe(clientSocket);
-            clientSocket.pipe(remoteSocket);
+            await Promise.all([
+                pipelineAsync(remoteSocket, clientSocket),
+                pipelineAsync(clientSocket, remoteSocket),
+            ]);
         } catch (error) {
             this.emit('error', error);
             const statusCode = (error as any).details?.statusCode ?? 502;
