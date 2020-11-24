@@ -29,7 +29,7 @@ export class RoutingProxy extends BaseProxy {
     matchRoute(host: string): ProxyUpstream | null {
         for (const route of this.routes) {
             if (route.hostRegexp.test(host)) {
-                return route.proxy;
+                return route.upstream;
             }
         }
         return this.defaultUpstream;
@@ -49,7 +49,7 @@ export class RoutingProxy extends BaseProxy {
      * they added (first match wins).
      */
     addRoute(hostRegexp: RegExp, proxy: ProxyUpstream | null, label: string = 'default') {
-        this.routes.unshift({ label, hostRegexp, proxy });
+        this.routes.unshift({ label, hostRegexp, upstream: proxy });
     }
 
     /**
@@ -69,7 +69,7 @@ export class RoutingProxy extends BaseProxy {
                     source: _.hostRegexp.source,
                     flags: _.hostRegexp.flags,
                 },
-                proxy: _.proxy,
+                upstream: _.upstream,
             };
         });
     }
@@ -79,7 +79,7 @@ export class RoutingProxy extends BaseProxy {
             return {
                 label: sr.label,
                 hostRegexp: new RegExp(sr.hostRegexp.source, sr.hostRegexp.flags),
-                proxy: sr.proxy,
+                upstream: sr.upstream,
             };
         });
     }
@@ -88,7 +88,7 @@ export class RoutingProxy extends BaseProxy {
 export interface ProxyRoute {
     label: string;
     hostRegexp: RegExp;
-    proxy: ProxyUpstream | null;
+    upstream: ProxyUpstream | null;
 }
 
 export interface SerializedProxyRoute {
@@ -97,5 +97,5 @@ export interface SerializedProxyRoute {
         source: string;
         flags: string;
     };
-    proxy: ProxyUpstream | null;
+    upstream: ProxyUpstream | null;
 }
