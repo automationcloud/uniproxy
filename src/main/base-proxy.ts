@@ -40,7 +40,7 @@ export class BaseProxy {
     warnErrorCodes: string[];
 
     constructor(options: Partial<ProxyConfig> = {}) {
-        const config = { ...DEFAULT_PROXY_CONFIG, options };
+        const config = { ...DEFAULT_PROXY_CONFIG, ...options };
         this.defaultUpstream = config.defaultUpstream;
         this.logger = config.logger;
         this.warnErrorCodes = config.warnErrorCodes;
