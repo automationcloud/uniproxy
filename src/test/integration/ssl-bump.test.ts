@@ -122,4 +122,39 @@ describe('SSL Bumping', () => {
 
     });
 
+    describe('send remote request and modify response', () => {
+
+        const sslBumpProxy = new SslBumpProxy({
+            // Note: we use same keys and certs for testing, but in reality those should be different!
+            caCert: certificate,
+            caPrivateKey: privateKey,
+            certPrivateKey: privateKey,
+            certPublicKey: publicKey,
+            certCacheMaxEntries: 100,
+            certTtlDays: 365,
+        });
+        sslBumpProxy.handleRequest = async function (this: SslBumpProxy, req, res, remote) {
+            const remoteRes = await this.forwardRequest(req, remote);
+            res.writeHead(remoteRes.statusCode!, remoteRes.headers);
+            // Buffer the remote response body and upper case it
+            let buffer = '';
+            for await (const chunk of remoteRes) {
+                buffer += chunk.toString('utf-8').toUpperCase();
+            }
+            res.end(buffer);
+        };
+        beforeEach(() => sslBumpProxy.start(0));
+        afterEach(() => sslBumpProxy.shutdown());
+
+        it('returns ad-hoc response', async () => {
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${sslBumpProxy.getServerPort()}`
+            }, { ca: certificate });
+            const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
+            const text = await res.text();
+            assert.strictEqual(text, 'YOU REQUESTED GET /FOO OVER HTTPS');
+        });
+
+    });
+
 });

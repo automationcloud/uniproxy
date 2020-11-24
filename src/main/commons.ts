@@ -29,3 +29,12 @@ export function makeRequestHead(req: http.IncomingMessage): string {
     }
     return lines.join('\r\n') + '\r\n\r\n';
 }
+
+export function makeResponseHead(res: http.IncomingMessage): string {
+    const lines: string[] = [];
+    lines.push(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`);
+    for (let i = 0; i < res.rawHeaders.length; i += 2) {
+        lines.push(`${res.rawHeaders[i]}: ${res.rawHeaders[i + 1]}`);
+    }
+    return lines.join('\r\n') + '\r\n\r\n';
+}

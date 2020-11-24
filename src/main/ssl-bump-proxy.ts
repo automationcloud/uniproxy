@@ -121,16 +121,6 @@ export class SslBumpProxy extends BaseProxy {
             });
             res.end('Service unavailable');
         }
-        // Dump the response right here:
-        // for await (const chunk of remoteSocket) {
-        //     console.log(chunk.toString());
-        // }
-
-        // Rewrite:
-        // res.writeHead(200, {
-        //     'content-type': 'text/plain',
-        // });
-        // res.end('PWNed bro');
     }
 
     /**
