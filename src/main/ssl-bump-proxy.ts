@@ -14,7 +14,8 @@
 
 import { BaseProxy } from './base-proxy';
 import { SslCertStore } from './ssl-cert-store';
-import http, { STATUS_CODES } from 'http';
+import http from 'http';
+import https from 'https';
 import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
@@ -88,14 +89,14 @@ export class SslBumpProxy extends BaseProxy {
                 port: this.getServerPort(),
                 host: this.getServerAddress(),
             });
-            await Promise.all([
+            await Promise.allSettled([
                 pipelineAsync(tlsClientSocket, localHttpSocket),
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
         } catch (error) {
             // TODO handle error
             const statusCode = (error as any).details?.statusCode ?? 502;
-            const statusText = STATUS_CODES[statusCode];
+            const statusText = http.STATUS_CODES[statusCode];
             try {
                 clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
                 clientSocket.end();
@@ -107,15 +108,19 @@ export class SslBumpProxy extends BaseProxy {
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         const host = req.headers.host ?? '';
-        const remote = this.remoteConnectionsMap.get(host)!;
-        if (!remote) {
+        try {
+            const remote = this.remoteConnectionsMap.get(host)!;
+            if (!remote) {
+                throw new RemoteConnectionNotAvailable();
+            }
+            await this.handleRequest(req, res, remote);
+        } catch (err) {
+            // TODO handle error
             res.writeHead(503, {
                 'content-type': 'text/plain'
             });
             res.end('Service unavailable');
         }
-        // TODO handle when remote is not available
-        await this.handleRequest(req, res, remote);
         // Dump the response right here:
         // for await (const chunk of remoteSocket) {
         //     console.log(chunk.toString());
@@ -143,8 +148,27 @@ export class SslBumpProxy extends BaseProxy {
      */
     async passthrough(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
         remote.write(makeRequestHead(req));
-        req.pipe(remote, { end: true });
-        remote.pipe((res as any).socket, { end: true });
+        await Promise.allSettled([
+            pipelineAsync(req, remote),
+            pipelineAsync(remote, res.socket!),
+        ]);
+    }
+
+    async forwardRequest(req: http.IncomingMessage, remote: net.Socket): Promise<http.IncomingMessage> {
+        const host = req.headers.host!;
+        const fwdReq = https.request(`https://${host}${req.url}`, {
+            method: req.method,
+            headers: req.headers,
+            createConnection() {
+                return remote;
+            },
+            ca: this.getCACertificates(),
+        });
+        await pipelineAsync(req, fwdReq);
+        return await new Promise<http.IncomingMessage>((resolve, reject) => {
+            fwdReq.once('error', reject);
+            fwdReq.once('response', fwdRes => resolve(fwdRes));
+        });
     }
 
     protected async negotiateTls(remoteSocket: net.Socket, hostname: string, port: number) {
@@ -204,5 +228,11 @@ export class RemoteConnectionNotAuthorized extends Error {
     constructor(cause: Error) {
         super(`Remote connection not authorized: ${cause.message}`);
         this.details = { cause: { ... cause } };
+    }
+}
+
+export class RemoteConnectionNotAvailable extends Error {
+    constructor() {
+        super(`Remote connection not availabe`);
     }
 }

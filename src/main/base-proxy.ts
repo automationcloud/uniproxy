@@ -65,7 +65,7 @@ export class BaseProxy {
     async start(
         port: number,
         hostname: string = '127.0.0.1',
-        options: http.ServerOptions = { insecureHTTPParser: true, maxHeaderSize: 65535 },
+        options: http.ServerOptions = {},
     ) {
         await new Promise((resolve, reject) => {
             this.server = http
@@ -198,7 +198,7 @@ export class BaseProxy {
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            await Promise.all([
+            await Promise.allSettled([
                 pipelineAsync(remoteSocket, clientSocket),
                 pipelineAsync(clientSocket, remoteSocket),
             ]);

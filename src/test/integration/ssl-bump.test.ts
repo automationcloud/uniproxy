@@ -63,4 +63,63 @@ describe('SSL Bumping', () => {
 
     });
 
+    describe('rewrite request', () => {
+
+        const sslBumpProxy = new SslBumpProxy({
+            // Note: we use same keys and certs for testing, but in reality those should be different!
+            caCert: certificate,
+            caPrivateKey: privateKey,
+            certPrivateKey: privateKey,
+            certPublicKey: publicKey,
+            certCacheMaxEntries: 100,
+            certTtlDays: 365,
+        });
+        sslBumpProxy.handleRequest = async function (this: SslBumpProxy, req, res, remote) {
+            req.url = '/barrr';
+            await this.passthrough(req, res, remote);
+        };
+        beforeEach(() => sslBumpProxy.start(0));
+        afterEach(() => sslBumpProxy.shutdown());
+
+        it('returns the result of modfied request', async () => {
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${sslBumpProxy.getServerPort()}`
+            }, { ca: certificate });
+            const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
+            const text = await res.text();
+            assert.strictEqual(text, 'You requested GET /barrr over https');
+        });
+
+    });
+
+    describe('rewrite response', () => {
+
+        const sslBumpProxy = new SslBumpProxy({
+            // Note: we use same keys and certs for testing, but in reality those should be different!
+            caCert: certificate,
+            caPrivateKey: privateKey,
+            certPrivateKey: privateKey,
+            certPublicKey: publicKey,
+            certCacheMaxEntries: 100,
+            certTtlDays: 365,
+        });
+        sslBumpProxy.handleRequest = async function(this: SslBumpProxy, req, res, remote) {
+            res.writeHead(200, { 'content-type': 'text/plain' });
+            res.end('Hello!');
+        };
+        beforeEach(() => sslBumpProxy.start(0));
+        afterEach(() => sslBumpProxy.shutdown());
+
+        it('returns ad-hoc response', async () => {
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${sslBumpProxy.getServerPort()}`
+            }, { ca: certificate });
+            const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
+            const text = await res.text();
+            assert.strictEqual(text, 'Hello!');
+            assert.strictEqual(res.headers.get('content-type'), 'text/plain');
+        });
+
+    });
+
 });
