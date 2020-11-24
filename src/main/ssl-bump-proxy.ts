@@ -84,6 +84,8 @@ export class SslBumpProxy extends BaseProxy {
             this.remoteConnectionsMap.set(targetHost, tlsRemoteSocket);
             remoteSocket.once('close', () => this.remoteConnectionsMap.delete(targetHost));
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+            // Once client socket closes, remote socket is no longer needed
+            clientSocket.once('close', () => remoteSocket.destroy());
             // Route decrypted traffic through internal HTTP server
             const localHttpSocket = net.connect({
                 port: this.getServerPort(),
