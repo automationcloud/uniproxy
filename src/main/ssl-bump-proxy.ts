@@ -21,6 +21,7 @@ import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
 import { makeRequestHead } from './commons';
+import { ProxyConfig } from './config';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -58,16 +59,18 @@ const pipelineAsync = promisify(pipeline);
  */
 export class SslBumpProxy extends BaseProxy {
 
+    sslBumpConfig: SslBumpConfig;
     certStore: SslCertStore;
     remoteConnectionsMap = new Map<string, net.Socket>();
 
-    constructor(public config: SslBumpConfig) {
-        super();
+    constructor(config: SslBumpConfig & Partial<ProxyConfig>) {
+        super(config);
+        this.sslBumpConfig = config;
         this.certStore = new SslCertStore(config);
     }
 
     getCACertificates() {
-        return [this.config.caCert, ...super.getCACertificates()];
+        return [this.sslBumpConfig.caCert, ...super.getCACertificates()];
     }
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
