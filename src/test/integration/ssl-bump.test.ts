@@ -103,8 +103,8 @@ describe('SSL Bumping', () => {
             certCacheMaxEntries: 100,
             certTtlDays: 365,
         });
-        sslBumpProxy.handleRequest = async function(this: SslBumpProxy, req, res, remote) {
-            res.writeHead(200, { 'content-type': 'text/plain' });
+        sslBumpProxy.handleRequest = async function(this: SslBumpProxy, _req, res, _remote) {
+            res.writeHead(200, { 'content-type': 'text/html' });
             res.end('Hello!');
         };
         beforeEach(() => sslBumpProxy.start(0));
@@ -117,7 +117,7 @@ describe('SSL Bumping', () => {
             const res = await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
             const text = await res.text();
             assert.strictEqual(text, 'Hello!');
-            assert.strictEqual(res.headers.get('content-type'), 'text/plain');
+            assert.strictEqual(res.headers.get('content-type'), 'text/html');
         });
 
     });
