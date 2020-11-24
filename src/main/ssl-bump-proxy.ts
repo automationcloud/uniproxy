@@ -19,6 +19,7 @@ import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
+import { makeRequestHead } from './commons';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -72,14 +73,12 @@ export class SslBumpProxy extends BaseProxy {
         try {
             // req.url always contains hostname:port
             const targetHost = req.url ?? '';
-            console.log('CONNECT', targetHost);
             const [hostname, _port] = targetHost.split(':');
             const port = Number(_port) || 443;
             const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
-            console.log('TLS bumped and negotiated');
             // Track remote sockets, because we'll need them in http handler
             this.remoteConnectionsMap.set(targetHost, tlsRemoteSocket);
             remoteSocket.once('close', () => this.remoteConnectionsMap.delete(targetHost));
@@ -94,7 +93,6 @@ export class SslBumpProxy extends BaseProxy {
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
         } catch (error) {
-            console.log('error', error);
             this.emit('error', error);
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = STATUS_CODES[statusCode];
@@ -104,20 +102,10 @@ export class SslBumpProxy extends BaseProxy {
     }
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-        console.log('req', req.url);
         const host = req.headers.host ?? '';
-        // TODO handle remoteSocket unavailable
-        const remoteSocket = this.remoteConnectionsMap.get(host)!;
-        // Forward:
-        const lines: string[] = [];
-        lines.push(`${req.method} ${req.url} HTTP/${req.httpVersion}`);
-        for (let i = 0; i < req.rawHeaders.length; i += 2) {
-            lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
-        }
-        remoteSocket.write(lines.join('\r\n') + '\r\n\r\n');
-        req.pipe(remoteSocket, { end: false });
-        remoteSocket.pipe((res as any).socket, { end: false });
-
+        const remote = this.remoteConnectionsMap.get(host)!;
+        // TODO handle when remote is not available
+        await this.handleRequest(req, res, remote);
         // Dump the response right here:
         // for await (const chunk of remoteSocket) {
         //     console.log(chunk.toString());
@@ -128,6 +116,25 @@ export class SslBumpProxy extends BaseProxy {
         //     'content-type': 'text/plain',
         // });
         // res.end('PWNed bro');
+    }
+
+    /**
+     * A hook for handling each HTTP request within SSL bumped session.
+     *
+     * Defaults to `passthrough`, can be overridden to handle the requests differently
+     * (e.g. route them to different destinations, modify/rewrite them, etc).
+     */
+    async handleRequest(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
+        await this.passthrough(req, res, remote);
+    }
+
+    /**
+     * Writes the request to remote, pipes remote to response.
+     */
+    async passthrough(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
+        remote.write(makeRequestHead(req));
+        req.pipe(remote, { end: true });
+        remote.pipe((res as any).socket, { end: true });
     }
 
     protected async negotiateTls(remoteSocket: net.Socket, hostname: string, port: number) {

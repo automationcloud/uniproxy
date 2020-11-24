@@ -1,3 +1,5 @@
+import http from 'http';
+
 export interface ProxyConfig {
     host: string;
     username?: string;
@@ -17,4 +19,13 @@ export class ProxyConnectionFailed extends Error {
         super(`Connection to proxy failed: ${cause}`);
         this.details = details;
     }
+}
+
+export function makeRequestHead(req: http.IncomingMessage): string {
+    const lines: string[] = [];
+    lines.push(`${req.method} ${req.url} HTTP/${req.httpVersion}`);
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+        lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+    }
+    return lines.join('\r\n') + '\r\n\r\n';
 }

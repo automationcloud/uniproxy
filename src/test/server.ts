@@ -9,12 +9,20 @@ export const httpsServer = https.createServer({
     key: privateKey,
 }, handler);
 
-function handler(req: http.IncomingMessage, res: http.ServerResponse) {
+async function handler(req: http.IncomingMessage, res: http.ServerResponse) {
     const isHttps = !!(req.connection as any).encrypted;
+    const bodyChunks = [];
+    for await (const chunk of req) {
+        bodyChunks.push(chunk);
+    }
     res.writeHead(200, STATUS_CODES[200], {
         'content-type': 'text/plain'
     });
-    res.end(`You requested ${req.url} over ${isHttps ? 'https' : 'http'}`);
+    const responseLines = [
+        `You requested ${req.method} ${req.url} over ${isHttps ? 'https' : 'http'}`,
+        Buffer.concat(bodyChunks).toString('utf-8'),
+    ];
+    res.end(responseLines.filter(Boolean).join('\n'));
 }
 
 export async function startServer(server: http.Server, port: number) {

@@ -1,6 +1,6 @@
 import { HTTP_PORT, HTTPS_PORT } from './env';
 import { httpServer, httpsServer, startServer } from './server';
-import { patchDnsLookup } from './util/fake-dns';
+import { patchDnsLookup } from './fake-dns';
 
 before(() => {
     patchDnsLookup([

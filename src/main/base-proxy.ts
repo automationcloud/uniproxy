@@ -259,7 +259,7 @@ export class BaseProxy extends EventEmitter {
     }
 
     protected createConnectReq(targetHost: string, proxy: ProxyConfig): http.ClientRequest {
-        const { useHttps = true } = proxy;
+        const { useHttps = false } = proxy;
         const [hostname, port] = proxy.host.split(':');
         const request = useHttps ? https.request : http.request;
         const connectReq = request({

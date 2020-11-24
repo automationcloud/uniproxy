@@ -1,7 +1,7 @@
-import { BaseProxy } from '../../main';
+import { BaseProxy } from '../main';
 import http from 'http';
 import net from 'net';
-import { certificate } from '../certs';
+import { certificate } from './certs';
 
 /**
  * A tiny proxy which acts as an intermediate downstream proxy (i.e. connects directly to destination).
