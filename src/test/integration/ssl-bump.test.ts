@@ -44,7 +44,7 @@ describe('SSL Bumping', () => {
         }
 
         context('direct connection', () => {
-            beforeEach(() => sslBumpProxy.upstreamProxy = null);
+            beforeEach(() => sslBumpProxy.defaultUpstream = null);
 
             it('returns remote response', async () => {
                 await sendRequestsWithAssertions();
@@ -53,7 +53,7 @@ describe('SSL Bumping', () => {
         });
 
         context('connection via upstream proxy', () => {
-            beforeEach(() => sslBumpProxy.upstreamProxy = { host: `localhost:${upstreamProxy.getServerPort()}` });
+            beforeEach(() => sslBumpProxy.defaultUpstream = { host: `localhost:${upstreamProxy.getServerPort()}` });
 
             it('returns remote response through proxy', async () => {
                 await sendRequestsWithAssertions();

@@ -18,7 +18,9 @@ import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commons';
+import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed } from './commons';
+import { Logger } from './logger';
+import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -33,7 +35,16 @@ export class BaseProxy {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
 
-    upstreamProxy: ProxyConfig | null = null;
+    defaultUpstream: ProxyUpstream | null;
+    logger: Logger;
+    warnErrorCodes: string[];
+
+    constructor(options: Partial<ProxyConfig> = {}) {
+        const config = { ...DEFAULT_PROXY_CONFIG, options };
+        this.defaultUpstream = config.defaultUpstream;
+        this.logger = config.logger;
+        this.warnErrorCodes = config.warnErrorCodes;
+    }
 
     /**
      * The hook for implementing routing logic per connection.
@@ -47,8 +58,8 @@ export class BaseProxy {
      *
      * By default, it returns a `upstreamProxy` all the time.
      */
-    matchRoute(_host: string): ProxyConfig | null {
-        return this.upstreamProxy;
+    matchRoute(_host: string): ProxyUpstream | null {
+        return this.defaultUpstream;
     }
 
     /**
@@ -137,6 +148,20 @@ export class BaseProxy {
         socket.once('close', () => this.clientSockets.delete(socket));
     }
 
+    /**
+     * Error handler hook can be overridden for custom error handling logic.
+     */
+    onError(error: any, details: any = {}) {
+        const isWarn = this.warnErrorCodes.includes(error.code);
+        error.details = {
+            proxyClass: this.constructor.name,
+            ...details,
+            ...error.details,
+        };
+        (isWarn ? this.logger.warn : this.logger.error)(
+            `Proxy error: ${error.message}`, { error });
+    }
+
     // HTTP
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -154,13 +179,13 @@ export class BaseProxy {
             res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
             fwdRes.pipe(res);
         } catch (error) {
-            // TODO handle error
+            this.onError(error, { url: req.url });
             res.writeHead(599);
             res.end();
         }
     }
 
-    protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyConfig): http.ClientRequest {
+    protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyUpstream): http.ClientRequest {
         const [hostname, port] = proxy.host.split(':');
         const options = {
             hostname,
@@ -203,7 +228,7 @@ export class BaseProxy {
                 pipelineAsync(clientSocket, remoteSocket),
             ]);
         } catch (error) {
-            // TODO handle error
+            this.onError(error, { url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = STATUS_CODES[statusCode];
             try {
@@ -218,7 +243,7 @@ export class BaseProxy {
     /**
      * Creates an onward connection to `targetHost` either directly or via upstream `proxy`.
      */
-    async createSslConnection(targetHost: string, proxy: ProxyConfig | null) {
+    async createSslConnection(targetHost: string, proxy: ProxyUpstream | null): Promise<net.Socket> {
         return proxy ? await this.createSslProxyConnection(targetHost, proxy) :
             await this.createSslDirectConnection(targetHost)
     }
@@ -226,7 +251,7 @@ export class BaseProxy {
     /**
      * Creates a connection to `targetHost` using specified `proxy`.
      */
-    protected async createSslProxyConnection(targetHost: string, proxy: ProxyConfig): Promise<net.Socket> {
+    protected async createSslProxyConnection(targetHost: string, proxy: ProxyUpstream): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
             const connectReq = this.createConnectReq(targetHost, proxy);
             connectReq.on('error', reject);
@@ -257,7 +282,7 @@ export class BaseProxy {
         });
     }
 
-    protected createConnectReq(targetHost: string, proxy: ProxyConfig): http.ClientRequest {
+    protected createConnectReq(targetHost: string, proxy: ProxyUpstream): http.ClientRequest {
         const { useHttps = false } = proxy;
         const [hostname, port] = proxy.host.split(':');
         const request = useHttps ? https.request : http.request;

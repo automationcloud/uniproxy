@@ -1,15 +1,22 @@
 import http from 'http';
 
-export interface ProxyConfig {
+export interface ProxyUpstream {
     host: string;
     username?: string;
     password?: string;
     useHttps?: boolean;
 }
 
-export function makeBasicAuthHeader(config: ProxyConfig) {
+export function makeBasicAuthHeader(config: ProxyUpstream) {
     const { username = '', password = '' } = config;
     return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+}
+
+export function makeProxyUrl(config: ProxyUpstream) {
+    const { useHttps, username, password } = config;
+    const protocol = useHttps ? 'https:' : 'http:';
+    const auth = (username || password) ? `${username}:${password}@` : '';
+    return `${protocol}//${auth}${config.host}`;
 }
 
 export class ProxyConnectionFailed extends Error {

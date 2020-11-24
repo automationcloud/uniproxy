@@ -94,7 +94,7 @@ export class SslBumpProxy extends BaseProxy {
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
         } catch (error) {
-            // TODO handle error
+            this.onError(error, { url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = http.STATUS_CODES[statusCode];
             try {
@@ -114,8 +114,8 @@ export class SslBumpProxy extends BaseProxy {
                 throw new RemoteConnectionNotAvailable();
             }
             await this.handleRequest(req, res, remote);
-        } catch (err) {
-            // TODO handle error
+        } catch (error) {
+            this.onError(error, { url: req.url });
             res.writeHead(503, {
                 'content-type': 'text/plain'
             });
