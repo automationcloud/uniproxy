@@ -16,7 +16,6 @@ import http, { STATUS_CODES } from 'http';
 import https from 'https';
 import net from 'net';
 import tls from 'tls';
-import { EventEmitter } from 'events';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
 import { makeBasicAuthHeader, ProxyConfig, ProxyConnectionFailed } from './commons';
@@ -30,15 +29,11 @@ const pipelineAsync = promisify(pipeline);
  * and routing such traffic either to a target destination (i.e. the website),
  * or to the next proxy in chain (aka "upstream" proxy).
  */
-export class BaseProxy extends EventEmitter {
+export class BaseProxy {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
 
     upstreamProxy: ProxyConfig | null = null;
-
-    constructor() {
-        super();
-    }
 
     /**
      * The hook for implementing routing logic per connection.
@@ -159,7 +154,7 @@ export class BaseProxy extends EventEmitter {
             res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
             fwdRes.pipe(res);
         } catch (error) {
-            this.emit('error', error);
+            // TODO handle error
             res.writeHead(599);
             res.end();
         }
@@ -208,11 +203,15 @@ export class BaseProxy extends EventEmitter {
                 pipelineAsync(clientSocket, remoteSocket),
             ]);
         } catch (error) {
-            this.emit('error', error);
+            // TODO handle error
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = STATUS_CODES[statusCode];
-            clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
-            clientSocket.end();
+            try {
+                clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
+                clientSocket.end();
+            } finally {
+                clientSocket.destroy();
+            }
         }
     }
 

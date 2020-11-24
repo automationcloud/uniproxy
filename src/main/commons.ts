@@ -16,7 +16,7 @@ export class ProxyConnectionFailed extends Error {
     details: any;
 
     constructor(cause: string, details: any) {
-        super(`Connection to proxy failed: ${cause}`);
+        super(`Connection to upstream proxy failed: ${cause}`);
         this.details = details;
     }
 }

@@ -11,7 +11,7 @@ describe('SSL Bumping', () => {
 
     beforeEach(() => upstreamProxy.start(0));
     beforeEach(() => upstreamProxy.reset());
-    afterEach(() => upstreamProxy.shutdown(true));
+    afterEach(() => upstreamProxy.shutdown());
 
     describe('passthrough', () => {
 

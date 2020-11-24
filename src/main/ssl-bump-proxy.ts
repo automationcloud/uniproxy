@@ -93,17 +93,27 @@ export class SslBumpProxy extends BaseProxy {
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
         } catch (error) {
-            this.emit('error', error);
+            // TODO handle error
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = STATUS_CODES[statusCode];
-            clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
-            clientSocket.end();
+            try {
+                clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
+                clientSocket.end();
+            } finally {
+                clientSocket.destroy();
+            }
         }
     }
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         const host = req.headers.host ?? '';
         const remote = this.remoteConnectionsMap.get(host)!;
+        if (!remote) {
+            res.writeHead(503, {
+                'content-type': 'text/plain'
+            });
+            res.end('Service unavailable');
+        }
         // TODO handle when remote is not available
         await this.handleRequest(req, res, remote);
         // Dump the response right here:
@@ -148,9 +158,8 @@ export class SslBumpProxy extends BaseProxy {
         }).setTimeout(60000, () => remoteSocket.end());
         await new Promise(r => tlsRemoteSocket.once('secureConnect', r));
         if (!tlsRemoteSocket.authorized) {
-            tlsRemoteSocket.end();
-            const error = new RemoteConnectionNotAuthorized(tlsRemoteSocket.authorizationError);
-            this.emit('error', error)
+            tlsRemoteSocket.destroy();
+            throw new RemoteConnectionNotAuthorized(tlsRemoteSocket.authorizationError);
         }
         return tlsRemoteSocket;
     }
