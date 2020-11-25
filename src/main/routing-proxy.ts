@@ -26,6 +26,10 @@ import { ProxyUpstream } from './commons';
 export class RoutingProxy extends BaseProxy {
     protected routes: ProxyRoute[] = [];
 
+    getRoutes() {
+        return this.routes;
+    }
+
     matchRoute(host: string): ProxyUpstream | null {
         for (const route of this.routes) {
             if (route.hostRegexp.test(host)) {
