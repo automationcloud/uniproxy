@@ -158,8 +158,8 @@ export class BaseProxy {
             ...details,
             ...error.details,
         };
-        (isWarn ? this.logger.warn : this.logger.error)(
-            `Proxy error: ${error.message}`, { error });
+        const method = isWarn ? this.logger.warn : this.logger.error;
+        method.call(this.logger, `Proxy error: ${error.message}`, { error });
     }
 
     // HTTP
