@@ -59,43 +59,10 @@ export class RoutingProxy extends BaseProxy {
         this.routes = this.routes.filter(r => r.label !== label);
     }
 
-    // Serialization (because RegExps are not otherwise serializable)
-
-    getSerializedRoutes(): SerializedProxyRoute[] {
-        return this.routes.map(_ => {
-            return {
-                label: _.label,
-                hostRegexp: {
-                    source: _.hostRegexp.source,
-                    flags: _.hostRegexp.flags,
-                },
-                upstream: _.upstream,
-            };
-        });
-    }
-
-    setSerializedRoutes(serializedRoutes: SerializedProxyRoute[]) {
-        this.routes = serializedRoutes.map(sr => {
-            return {
-                label: sr.label,
-                hostRegexp: new RegExp(sr.hostRegexp.source, sr.hostRegexp.flags),
-                upstream: sr.upstream,
-            };
-        });
-    }
 }
 
 export interface ProxyRoute {
     label: string;
     hostRegexp: RegExp;
-    upstream: ProxyUpstream | null;
-}
-
-export interface SerializedProxyRoute {
-    label: string;
-    hostRegexp: {
-        source: string;
-        flags: string;
-    };
     upstream: ProxyUpstream | null;
 }

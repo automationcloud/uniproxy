@@ -94,7 +94,7 @@ export class SslBumpProxy extends BaseProxy {
                 port: this.getServerPort(),
                 host: this.getServerAddress(),
             });
-            await Promise.allSettled([
+            await Promise.all([
                 pipelineAsync(tlsClientSocket, localHttpSocket),
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
@@ -143,7 +143,7 @@ export class SslBumpProxy extends BaseProxy {
      */
     async passthrough(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
         remote.write(makeRequestHead(req));
-        await Promise.allSettled([
+        await Promise.all([
             pipelineAsync(req, remote),
             pipelineAsync(remote, res.socket!),
         ]);
@@ -175,14 +175,16 @@ export class SslBumpProxy extends BaseProxy {
             timeout: 60000,
             ca: this.getCACertificates(),
         }).setTimeout(60000, () => remoteSocket.end());
-        await new Promise(r => tlsRemoteSocket.once('secureConnect', r));
+        await new Promise((resolve, reject) => {
+            tlsRemoteSocket.once('secureConnect', resolve);
+            tlsRemoteSocket.once('error', reject);
+        });
         if (!tlsRemoteSocket.authorized) {
             tlsRemoteSocket.destroy();
             throw new RemoteConnectionNotAuthorized(tlsRemoteSocket.authorizationError);
         }
         return tlsRemoteSocket;
     }
-
 }
 
 export interface SslBumpConfig {

@@ -223,7 +223,7 @@ export class BaseProxy {
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            await Promise.allSettled([
+            await Promise.all([
                 pipelineAsync(remoteSocket, clientSocket),
                 pipelineAsync(clientSocket, remoteSocket),
             ]);
