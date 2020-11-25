@@ -37,12 +37,14 @@ export class BaseProxy {
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
+    muteErrorCodes: string[];
     warnErrorCodes: string[];
 
     constructor(options: Partial<ProxyConfig> = {}) {
         const config = { ...DEFAULT_PROXY_CONFIG, ...options };
         this.defaultUpstream = config.defaultUpstream;
         this.logger = config.logger;
+        this.muteErrorCodes = config.muteErrorCodes;
         this.warnErrorCodes = config.warnErrorCodes;
     }
 
@@ -150,8 +152,14 @@ export class BaseProxy {
 
     /**
      * Error handler hook can be overridden for custom error handling logic.
+     *
+     * By default it logs the error, unless it is muted according to `config.muteErrorCodes`.
      */
     onError(error: any, details: any = {}) {
+        const isMuted = this.muteErrorCodes.includes(error.code);
+        if (isMuted) {
+            return;
+        }
         const isWarn = this.warnErrorCodes.includes(error.code);
         error.details = {
             proxyClass: this.constructor.name,
@@ -179,7 +187,7 @@ export class BaseProxy {
             res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
             fwdRes.pipe(res);
         } catch (error) {
-            this.onError(error, { url: req.url });
+            this.onError(error, { handler: 'onRequest', url: req.url });
             res.writeHead(599);
             res.end();
         }
@@ -228,7 +236,7 @@ export class BaseProxy {
                 pipelineAsync(clientSocket, remoteSocket),
             ]);
         } catch (error) {
-            this.onError(error, { url: req.url });
+            this.onError(error, { handler: 'onConnect', url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = STATUS_CODES[statusCode];
             try {

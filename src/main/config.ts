@@ -34,6 +34,12 @@ export interface ProxyConfig {
 
     /**
      * A list of error codes from https://nodejs.org/api/errors.html#errors_node_js_error_codes
+     * to be ignored and not logged at all.
+     */
+    muteErrorCodes: string[];
+
+    /**
+     * A list of error codes from https://nodejs.org/api/errors.html#errors_node_js_error_codes
      * to be treated as warnings istead of errors.
      */
     warnErrorCodes: string[];
@@ -42,5 +48,6 @@ export interface ProxyConfig {
 export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     defaultUpstream: null,
     logger: console,
-    warnErrorCodes: ['ECONNRESET', 'EINVAL', 'ENOTCONN', 'EPIPE'],
+    muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
+    warnErrorCodes: ['ECONNRESET', 'EINVAL', 'ENOTCONN', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
 };

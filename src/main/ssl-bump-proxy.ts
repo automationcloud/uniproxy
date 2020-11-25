@@ -83,23 +83,29 @@ export class SslBumpProxy extends BaseProxy {
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
-            // Track remote sockets, because we'll need them in http handler
-            this.remoteConnectionsMap.set(targetHost, tlsRemoteSocket);
-            remoteSocket.once('close', () => this.remoteConnectionsMap.delete(targetHost));
-            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            // Once client socket closes, remote socket is no longer needed
-            clientSocket.once('close', () => remoteSocket.destroy());
             // Route decrypted traffic through internal HTTP server
             const localHttpSocket = net.connect({
                 port: this.getServerPort(),
                 host: this.getServerAddress(),
             });
+            await new Promise((resolve, reject) => {
+                localHttpSocket.on('connect', resolve);
+                localHttpSocket.on('error', reject);
+            });
+            // Here's a trick: we need to share the remote socket with internal HTTP handler;
+            // since it's the same process we'll use socket local port as a key
+            const connectionKey = `${localHttpSocket.localAddress}:${localHttpSocket.localPort}`;
+            this.remoteConnectionsMap.set(connectionKey, tlsRemoteSocket);
+            remoteSocket.once('close', () => this.remoteConnectionsMap.delete(connectionKey));
+            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+            // Once client socket closes, remote socket is no longer needed
+            clientSocket.once('close', () => remoteSocket.destroy());
             await Promise.all([
                 pipelineAsync(tlsClientSocket, localHttpSocket),
                 pipelineAsync(localHttpSocket, tlsClientSocket),
             ]);
         } catch (error) {
-            this.onError(error, { url: req.url });
+            this.onError(error, { handler: 'onConnect', url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;
             const statusText = http.STATUS_CODES[statusCode];
             try {
@@ -112,15 +118,16 @@ export class SslBumpProxy extends BaseProxy {
     }
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+        const connectionKey = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
         const host = req.headers.host ?? '';
         try {
-            const remote = this.remoteConnectionsMap.get(host)!;
+            const remote = this.remoteConnectionsMap.get(connectionKey);
             if (!remote) {
-                throw new RemoteConnectionNotAvailable();
+                throw new RemoteConnectionNotAvailable({ url: req.url, host, connectionKey });
             }
             await this.handleRequest(req, res, remote);
         } catch (error) {
-            this.onError(error, { url: req.url });
+            this.onError(error, { handler: 'onRequest', url: req.url, host });
             res.writeHead(503, {
                 'content-type': 'text/plain'
             });
@@ -229,7 +236,7 @@ export class RemoteConnectionNotAuthorized extends Error {
 }
 
 export class RemoteConnectionNotAvailable extends Error {
-    constructor() {
+    constructor(public details: any = {}) {
         super(`Remote connection not availabe`);
     }
 }
