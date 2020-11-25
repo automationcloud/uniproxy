@@ -13,9 +13,10 @@ export function makeBasicAuthHeader(config: ProxyUpstream) {
 }
 
 export function makeProxyUrl(config: ProxyUpstream) {
-    const { useHttps, username, password } = config;
+    const { useHttps, username = '', password = '' } = config;
     const protocol = useHttps ? 'https:' : 'http:';
-    const auth = (username || password) ? `${username}:${password}@` : '';
+    const auth = (username || password) ?
+        `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
     return `${protocol}//${auth}${config.host}`;
 }
 
