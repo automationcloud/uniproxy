@@ -78,7 +78,10 @@ export class BaseProxy {
     async start(
         port: number,
         hostname: string = '127.0.0.1',
-        options: http.ServerOptions = {},
+        options: http.ServerOptions = {
+            insecureHTTPParser: true,
+            maxHeaderSize: 65535
+        },
     ) {
         await new Promise((resolve, reject) => {
             this.server = http

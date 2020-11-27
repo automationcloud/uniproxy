@@ -83,27 +83,18 @@ export class SslBumpProxy extends BaseProxy {
             const upstream = this.matchRoute(targetHost);
             const remoteSocket = await this.createSslConnection(targetHost, upstream);
             const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
-            // Route decrypted traffic through internal HTTP server
-            const localHttpSocket = net.connect({
-                port: this.getServerPort(),
-                host: this.getServerAddress(),
-            });
-            await new Promise((resolve, reject) => {
-                localHttpSocket.on('connect', resolve);
-                localHttpSocket.on('error', reject);
-            });
-            // Here's a trick: we need to share the remote socket with internal HTTP handler;
-            // since it's the same process we'll use socket local port as a key
-            const connectionKey = `${localHttpSocket.localAddress}:${localHttpSocket.localPort}`;
-            this.remoteConnectionsMap.set(connectionKey, tlsRemoteSocket);
-            remoteSocket.once('close', () => this.remoteConnectionsMap.delete(connectionKey));
             clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            // Once client socket closes, remote socket is no longer needed
-            clientSocket.once('close', () => remoteSocket.destroy());
-            await Promise.all([
-                pipelineAsync(tlsClientSocket, localHttpSocket),
-                pipelineAsync(localHttpSocket, tlsClientSocket),
-            ]);
+            await this.handleTls(tlsClientSocket, tlsRemoteSocket, req);
+            tlsRemoteSocket.on('close', () => {
+                if (!tlsClientSocket.destroyed) {
+                    tlsClientSocket.end();
+                }
+            });
+            tlsClientSocket.on('close', () => {
+                if (!tlsRemoteSocket.destroyed) {
+                    tlsRemoteSocket.end();
+                }
+            });
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;
@@ -115,6 +106,27 @@ export class SslBumpProxy extends BaseProxy {
                 clientSocket.destroy();
             }
         }
+    }
+
+    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, _connectReq: http.IncomingMessage): Promise<void> {
+        // Route decrypted traffic through internal HTTP server
+        const localHttpSocket = net.connect({
+            port: this.getServerPort(),
+            host: this.getServerAddress(),
+        });
+        await new Promise((resolve, reject) => {
+            localHttpSocket.on('connect', resolve);
+            localHttpSocket.on('error', reject);
+        });
+        // Here's a trick: we need to share the remote socket with internal HTTP handler;
+        // since it's the same process we'll use socket local port as a key
+        const connectionKey = `${localHttpSocket.localAddress}:${localHttpSocket.localPort}`;
+        this.remoteConnectionsMap.set(connectionKey, tlsRemoteSocket);
+        tlsRemoteSocket.once('close', () => this.remoteConnectionsMap.delete(connectionKey));
+        await Promise.all([
+            pipelineAsync(tlsClientSocket, localHttpSocket),
+            pipelineAsync(localHttpSocket, tlsClientSocket),
+        ]);
     }
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -165,7 +177,8 @@ export class SslBumpProxy extends BaseProxy {
                 return remote;
             },
             ca: this.getCACertificates(),
-        });
+            insecureHTTPParser: true,
+        } as any);
         await pipelineAsync(req, fwdReq);
         return await new Promise<http.IncomingMessage>((resolve, reject) => {
             fwdReq.once('error', reject);
