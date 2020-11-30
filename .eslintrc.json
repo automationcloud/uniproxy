@@ -63,7 +63,7 @@
             "warn",
             {
                 "ignoreRestSiblings": true,
-                "args": "after-used",
+                "args": "none",
                 "varsIgnorePattern": "^_",
                 "argsIgnorePattern": "^_"
             }

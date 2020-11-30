@@ -15,12 +15,10 @@
 import { BaseProxy } from './base-proxy';
 import { SslCertStore } from './ssl-cert-store';
 import http from 'http';
-import https from 'https';
 import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import { makeRequestHead } from './commons';
 import { ProxyConfig } from './config';
 
 const pipelineAsync = promisify(pipeline);
@@ -108,82 +106,21 @@ export class SslBumpProxy extends BaseProxy {
         }
     }
 
-    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, _connectReq: http.IncomingMessage): Promise<void> {
-        // Route decrypted traffic through internal HTTP server
-        const localHttpSocket = net.connect({
-            port: this.getServerPort(),
-            host: this.getServerAddress(),
-        });
-        await new Promise((resolve, reject) => {
-            localHttpSocket.on('connect', resolve);
-            localHttpSocket.on('error', reject);
-        });
-        // Here's a trick: we need to share the remote socket with internal HTTP handler;
-        // since it's the same process we'll use socket local port as a key
-        const connectionKey = `${localHttpSocket.localAddress}:${localHttpSocket.localPort}`;
-        this.remoteConnectionsMap.set(connectionKey, tlsRemoteSocket);
-        tlsRemoteSocket.once('close', () => this.remoteConnectionsMap.delete(connectionKey));
-        await Promise.all([
-            pipelineAsync(tlsClientSocket, localHttpSocket),
-            pipelineAsync(localHttpSocket, tlsClientSocket),
-        ]);
-    }
-
-    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-        const connectionKey = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
-        const host = req.headers.host ?? '';
-        try {
-            const remote = this.remoteConnectionsMap.get(connectionKey);
-            if (!remote) {
-                throw new RemoteConnectionNotAvailable({ url: req.url, host, connectionKey });
-            }
-            await this.handleRequest(req, res, remote);
-        } catch (error) {
-            this.onError(error, { handler: 'onRequest', url: req.url, host });
-            res.writeHead(503, {
-                'content-type': 'text/plain'
-            });
-            res.end('Service unavailable');
-        }
-    }
-
     /**
-     * A hook for handling each HTTP request within SSL bumped session.
+     * A hook into handling the decrypted SSL traffic, essentially a man-in-the-middle between client and remote.
      *
-     * Defaults to `passthrough`, can be overridden to handle the requests differently
-     * (e.g. route them to different destinations, modify/rewrite them, etc).
+     * Defaults to passthrough, piping both sockets into each other. Implementations can override this
+     * to define custom logic.
+     *
+     * @param tlsClientSocket A client TLS socket, who initiated the SSL transaction
+     * @param tlsRemoteSocket A remote server TLS socket (i.e. the target website)
+     * @param connectReq A CONNECT request which originated the SSL transaction
      */
-    async handleRequest(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
-        await this.passthrough(req, res, remote);
-    }
-
-    /**
-     * Writes the request to remote, pipes remote to response.
-     */
-    async passthrough(req: http.IncomingMessage, res: http.ServerResponse, remote: net.Socket): Promise<void> {
-        remote.write(makeRequestHead(req));
+    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, connectReq: http.IncomingMessage): Promise<void> {
         await Promise.all([
-            pipelineAsync(req, remote),
-            pipelineAsync(remote, res.socket!),
+            pipelineAsync(tlsClientSocket, tlsRemoteSocket),
+            pipelineAsync(tlsRemoteSocket, tlsClientSocket),
         ]);
-    }
-
-    async forwardRequest(req: http.IncomingMessage, remote: net.Socket): Promise<http.IncomingMessage> {
-        const host = req.headers.host!;
-        const fwdReq = https.request(`https://${host}${req.url}`, {
-            method: req.method,
-            headers: req.headers,
-            createConnection() {
-                return remote;
-            },
-            ca: this.getCACertificates(),
-            insecureHTTPParser: true,
-        } as any);
-        await pipelineAsync(req, fwdReq);
-        return await new Promise<http.IncomingMessage>((resolve, reject) => {
-            fwdReq.once('error', reject);
-            fwdReq.once('response', fwdRes => resolve(fwdRes));
-        });
     }
 
     protected async negotiateTls(remoteSocket: net.Socket, hostname: string, port: number) {
@@ -245,11 +182,5 @@ export class RemoteConnectionNotAuthorized extends Error {
     constructor(cause: Error) {
         super(`Remote connection not authorized: ${cause.message}`);
         this.details = { cause: { ... cause } };
-    }
-}
-
-export class RemoteConnectionNotAvailable extends Error {
-    constructor(public details: any = {}) {
-        super(`Remote connection not availabe`);
     }
 }

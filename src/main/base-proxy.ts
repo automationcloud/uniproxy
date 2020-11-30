@@ -173,58 +173,6 @@ export class BaseProxy {
         method.call(this.logger, `Proxy error: ${error.message}`, { error });
     }
 
-    // HTTP
-
-    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-        try {
-            const { host } = new URL(req.url!);
-            const upstream = this.matchRoute(host);
-            const fwdReq = upstream ?
-                this.createProxyHttpRequest(req, upstream) :
-                this.createDirectHttpRequest(req);
-            req.pipe(fwdReq);
-            const fwdRes = await new Promise<http.IncomingMessage>((resolve, reject) => {
-                fwdReq.once('error', reject);
-                fwdReq.once('response', fwdRes => resolve(fwdRes));
-            });
-            res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
-            fwdRes.pipe(res);
-        } catch (error) {
-            this.onError(error, { handler: 'onRequest', url: req.url });
-            res.writeHead(599);
-            res.end();
-        }
-    }
-
-    protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyUpstream): http.ClientRequest {
-        const [hostname, port] = proxy.host.split(':');
-        const options = {
-            hostname,
-            port,
-            path: req.url,
-            method: req.method,
-            headers: req.headers,
-        };
-        const fwdReq = proxy.useHttps ?
-            https.request({ ...options, ca: this.getCACertificates() }) :
-            http.request(options);
-        if (proxy.username || proxy.password) {
-            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(proxy));
-        }
-        return fwdReq;
-    }
-
-    protected createDirectHttpRequest(req: http.IncomingMessage): http.ClientRequest {
-        const { hostname, port = 80, pathname, search } = new URL(req.url!);
-        return http.request({
-            hostname,
-            port,
-            path: pathname + search,
-            method: req.method,
-            headers: req.headers,
-        });
-    }
-
     // HTTPS
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
@@ -293,9 +241,12 @@ export class BaseProxy {
         });
     }
 
-    protected createConnectReq(targetHost: string, proxy: ProxyUpstream): http.ClientRequest {
-        const { useHttps = false } = proxy;
-        const [hostname, port] = proxy.host.split(':');
+    /**
+     * Creates an onward CONNECT request to specified `targetHost` via specified `upstream` proxy.
+     */
+    protected createConnectReq(targetHost: string, upstream: ProxyUpstream): http.ClientRequest {
+        const { useHttps = false } = upstream;
+        const [hostname, port] = upstream.host.split(':');
         const request = useHttps ? https.request : http.request;
         const connectReq = request({
             hostname,
@@ -307,10 +258,62 @@ export class BaseProxy {
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
         } as any);
-        if (proxy.username || proxy.password) {
-            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(proxy));
+        if (upstream.username || upstream.password) {
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
         }
         return connectReq;
+    }
+
+    // HTTP
+
+    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+        try {
+            const { host } = new URL(req.url!);
+            const upstream = this.matchRoute(host);
+            const fwdReq = upstream ?
+                this.createProxyHttpRequest(req, upstream) :
+                this.createDirectHttpRequest(req);
+            req.pipe(fwdReq);
+            const fwdRes = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                fwdReq.once('error', reject);
+                fwdReq.once('response', fwdRes => resolve(fwdRes));
+            });
+            res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
+            fwdRes.pipe(res);
+        } catch (error) {
+            this.onError(error, { handler: 'onRequest', url: req.url });
+            res.writeHead(599);
+            res.end();
+        }
+    }
+
+    protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyUpstream): http.ClientRequest {
+        const [hostname, port] = proxy.host.split(':');
+        const options = {
+            hostname,
+            port,
+            path: req.url,
+            method: req.method,
+            headers: req.headers,
+        };
+        const fwdReq = proxy.useHttps ?
+            https.request({ ...options, ca: this.getCACertificates() }) :
+            http.request(options);
+        if (proxy.username || proxy.password) {
+            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(proxy));
+        }
+        return fwdReq;
+    }
+
+    protected createDirectHttpRequest(req: http.IncomingMessage): http.ClientRequest {
+        const { hostname, port = 80, pathname, search } = new URL(req.url!);
+        return http.request({
+            hostname,
+            port,
+            path: pathname + search,
+            method: req.method,
+            headers: req.headers,
+        });
     }
 
 }
