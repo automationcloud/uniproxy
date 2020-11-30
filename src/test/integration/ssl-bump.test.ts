@@ -11,7 +11,7 @@ describe('SSL Bumping', () => {
 
     beforeEach(() => upstreamProxy.start(0));
     beforeEach(() => upstreamProxy.reset());
-    afterEach(() => upstreamProxy.shutdown());
+    afterEach(() => upstreamProxy.shutdown(true));
 
     describe('passthrough', () => {
 
@@ -25,7 +25,7 @@ describe('SSL Bumping', () => {
             certTtlDays: 365,
         });
         beforeEach(() => sslBumpProxy.start(0));
-        afterEach(() => sslBumpProxy.shutdown());
+        afterEach(() => sslBumpProxy.shutdown(true));
 
         async function sendRequestsWithAssertions() {
             const agent = new HttpsProxyAgent({
