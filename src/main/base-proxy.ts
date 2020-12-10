@@ -20,7 +20,7 @@ import { pipeline } from 'stream';
 import { promisify } from 'util';
 import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed } from './commons';
 import { Logger } from './logger';
-import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
+import { Connection, DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -34,6 +34,7 @@ const pipelineAsync = promisify(pipeline);
 export class BaseProxy {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
+    protected sslConnections: Map<string, Connection> = new Map();
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
@@ -59,8 +60,12 @@ export class BaseProxy {
      * to the upstream proxy.
      *
      * By default, it returns a `upstreamProxy` all the time.
+     *
+     * @param host - the host to connect to
+     * @param request - the initial proxy http request; this will be either a CONNECT request for https,
+     *   or a regular http request containing full URL in its first line (req.url).
      */
-    matchRoute(_host: string): ProxyUpstream | null {
+    matchRoute(host: string, request: http.IncomingMessage): ProxyUpstream | null {
         return this.defaultUpstream;
     }
 
@@ -179,12 +184,12 @@ export class BaseProxy {
         try {
             // Note: CONNECT request's url always contains Host (hostname:port)
             const targetHost = req.url ?? '';
-            const upstream = this.matchRoute(targetHost);
-            const remoteSocket = await this.createSslConnection(targetHost, upstream);
-            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
+            const upstream = this.matchRoute(targetHost, req);
+            const remoteConn = await this.createSslConnection(targetHost, upstream);
+            await this.replyToConnectRequest(clientSocket, remoteConn);
             await Promise.all([
-                pipelineAsync(remoteSocket, clientSocket),
-                pipelineAsync(clientSocket, remoteSocket),
+                pipelineAsync(remoteConn.socket, clientSocket),
+                pipelineAsync(clientSocket, remoteConn.socket),
             ]);
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
@@ -199,18 +204,41 @@ export class BaseProxy {
         }
     }
 
+    protected async replyToConnectRequest(clientSocket: net.Socket, connection: Connection) {
+        await new Promise((resolve, reject) => {
+            const payload = [
+                `HTTP/1.1 200 OK`,
+                `X-Connection-Id: ${connection.connectionId}`,
+                '',
+                '',
+            ].join('\r\n');
+            clientSocket.write(payload, err => {
+                if (err != null) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
     /**
      * Creates an onward connection to `targetHost` either directly or via upstream `proxy`.
      */
-    async createSslConnection(targetHost: string, proxy: ProxyUpstream | null): Promise<net.Socket> {
-        return proxy ? await this.createSslProxyConnection(targetHost, proxy) :
-            await this.createSslDirectConnection(targetHost)
+    async createSslConnection(host: string, upstream: ProxyUpstream | null): Promise<Connection> {
+        const connectionId = Math.random().toString(36).substring(2);
+        const socket = upstream ? await this.sslProxyConnect(host, upstream) :
+            await this.sslDirectConnect(host);
+        const connection = { connectionId, host, upstream, socket };
+        this.sslConnections.set(connectionId, connection);
+        socket.on('close', () => this.sslConnections.delete(connectionId));
+        return connection;
     }
 
     /**
      * Creates a connection to `targetHost` using specified `proxy`.
      */
-    protected async createSslProxyConnection(targetHost: string, proxy: ProxyUpstream): Promise<net.Socket> {
+    protected async sslProxyConnect(targetHost: string, proxy: ProxyUpstream): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
             const connectReq = this.createConnectReq(targetHost, proxy);
             connectReq.on('error', reject);
@@ -231,7 +259,7 @@ export class BaseProxy {
     /**
      * Creates a connection to `targetHost` directly (without proxy).
      */
-    protected async createSslDirectConnection(targetHost: string): Promise<net.Socket> {
+    protected async sslDirectConnect(targetHost: string): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
             const url = new URL('https://' + targetHost);
             const port = Number(url.port) || 443;
@@ -269,7 +297,7 @@ export class BaseProxy {
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         try {
             const { host } = new URL(req.url!);
-            const upstream = this.matchRoute(host);
+            const upstream = this.matchRoute(host, req);
             const fwdReq = upstream ?
                 this.createProxyHttpRequest(req, upstream) :
                 this.createDirectHttpRequest(req);
