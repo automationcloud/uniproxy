@@ -34,7 +34,6 @@ const pipelineAsync = promisify(pipeline);
 export class BaseProxy {
     protected server: http.Server | null = null;
     protected clientSockets: Set<net.Socket> = new Set();
-    protected sslConnections: Map<string, Connection> = new Map();
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
@@ -230,8 +229,6 @@ export class BaseProxy {
         const socket = upstream ? await this.sslProxyConnect(host, upstream) :
             await this.sslDirectConnect(host);
         const connection = { connectionId, host, upstream, socket };
-        this.sslConnections.set(connectionId, connection);
-        socket.on('close', () => this.sslConnections.delete(connectionId));
         return connection;
     }
 
