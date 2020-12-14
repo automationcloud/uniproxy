@@ -78,11 +78,10 @@ export class SslBumpProxy extends BaseProxy {
             const [hostname, _port] = targetHost.split(':');
             const port = Number(_port) || 443;
             const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
-            const upstream = this.matchRoute(targetHost);
-            const remoteSocket = await this.createSslConnection(targetHost, upstream);
-            const tlsRemoteSocket = await this.negotiateTls(remoteSocket, hostname, port);
-            clientSocket.write(`HTTP/${req.httpVersion} 200 OK\r\n\r\n`);
-            await this.handleTls(tlsClientSocket, tlsRemoteSocket, req);
+            const upstream = this.matchRoute(targetHost, req);
+            const remoteConn = await this.createSslConnection(targetHost, upstream);
+            const tlsRemoteSocket = await this.negotiateTls(remoteConn.socket, hostname, port);
+            await this.replyToConnectRequest(clientSocket, remoteConn);
             tlsRemoteSocket.on('close', () => {
                 if (!tlsClientSocket.destroyed) {
                     tlsClientSocket.end();
@@ -93,6 +92,7 @@ export class SslBumpProxy extends BaseProxy {
                     tlsRemoteSocket.end();
                 }
             });
+            await this.handleTls(tlsClientSocket, tlsRemoteSocket, req);
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
             const statusCode = (error as any).details?.statusCode ?? 502;

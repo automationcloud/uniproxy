@@ -14,6 +14,7 @@
 
 import { ProxyUpstream } from './commons';
 import { Logger } from './logger';
+import net from 'net';
 
 /**
  * Proxy configuration object.
@@ -51,3 +52,13 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
     warnErrorCodes: ['ECONNRESET', 'EINVAL', 'ENOTCONN', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
 };
+
+/**
+ * Describes an established connection.
+ */
+export interface Connection {
+    connectionId: string;
+    host: string;
+    upstream: ProxyUpstream | null;
+    socket: net.Socket;
+}
