@@ -32,8 +32,9 @@ const pipelineAsync = promisify(pipeline);
  * or to the next proxy in chain (aka "upstream" proxy).
  */
 export class BaseProxy {
-    protected server: http.Server | null = null;
-    protected clientSockets: Set<net.Socket> = new Set();
+    server: http.Server | null = null;
+    clientSockets: Set<net.Socket> = new Set();
+    trackedConnections: Map<string, Connection> = new Map();
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
@@ -222,54 +223,58 @@ export class BaseProxy {
     }
 
     /**
-     * Creates an onward connection to `targetHost` either directly or via upstream `proxy`.
+     * Creates an onward connection to `host` either directly or via upstream `proxy`.
      */
     async createSslConnection(host: string, upstream: ProxyUpstream | null): Promise<Connection> {
-        const connectionId = Math.random().toString(36).substring(2);
-        const socket = upstream ? await this.sslProxyConnect(host, upstream) :
+        const connection = upstream ?
+            await this.sslProxyConnect(host, upstream) :
             await this.sslDirectConnect(host);
-        const connection = { connectionId, host, upstream, socket };
+        const { connectionId, socket } = connection;
+        this.trackedConnections.set(connectionId, connection);
+        socket.on('close', () => this.trackedConnections.delete(connectionId));
         return connection;
     }
 
     /**
-     * Creates a connection to `targetHost` using specified `proxy`.
+     * Creates a connection to `host` using specified `upstream`.
      */
-    protected async sslProxyConnect(targetHost: string, proxy: ProxyUpstream): Promise<net.Socket> {
-        return new Promise((resolve, reject) => {
-            const connectReq = this.createConnectReq(targetHost, proxy);
+    protected async sslProxyConnect(host: string, upstream: ProxyUpstream): Promise<Connection> {
+        const connectReq = this.createConnectRequest(host, upstream);
+        const [connectRes, socket] = await new Promise<[http.IncomingMessage, net.Socket]>((resolve, reject) => {
             connectReq.on('error', reject);
-            connectReq.on('connect', (res: http.IncomingMessage, remoteSocket: net.Socket) => {
-                if ((res.statusCode || 599) >= 400) {
-                    const error = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`, {
-                        proxy,
-                        statusCode: res.statusCode
-                    });
-                    reject(error);
-                }
-                resolve(remoteSocket);
-            });
-            connectReq.end();
+            connectReq.on('connect', (connectRes: http.IncomingMessage, remoteSocket: net.Socket) => resolve([connectRes, remoteSocket]));
         });
+        if (connectRes.statusCode! >= 400) {
+            const error = new ProxyConnectionFailed(`Proxy returned ${connectRes.statusCode} ${connectRes.statusMessage}`, {
+                upstream,
+                statusCode: connectRes.statusCode
+            });
+            throw error;
+        }
+        const connectionId = String(connectRes.headers['x-connection-id']) || Math.random().toString(36).substring(2);
+        const connection: Connection = { connectionId, host, upstream, socket };
+        return connection;
     }
 
     /**
-     * Creates a connection to `targetHost` directly (without proxy).
+     * Creates a connection to `host` directly (without proxy).
      */
-    protected async sslDirectConnect(targetHost: string): Promise<net.Socket> {
-        return new Promise((resolve, reject) => {
-            const url = new URL('https://' + targetHost);
+    protected async sslDirectConnect(host: string): Promise<Connection> {
+        const connectionId = Math.random().toString(36).substring(2);
+        const socket = await new Promise<net.Socket>((resolve, reject) => {
+            const url = new URL('https://' + host);
             const port = Number(url.port) || 443;
-            const remoteSocket = net.connect(port, url.hostname);
-            remoteSocket.once('error', reject);
-            remoteSocket.once('connect', () => resolve(remoteSocket));
+            const socket = net.connect(port, url.hostname);
+            socket.once('error', reject);
+            socket.once('connect', () => resolve(socket));
         });
+        return { connectionId, host, socket, upstream: null };
     }
 
     /**
      * Creates an onward CONNECT request to specified `targetHost` via specified `upstream` proxy.
      */
-    protected createConnectReq(targetHost: string, upstream: ProxyUpstream): http.ClientRequest {
+    protected createConnectRequest(targetHost: string, upstream: ProxyUpstream): http.ClientRequest {
         const { useHttps = false } = upstream;
         const [hostname, port] = upstream.host.split(':');
         const request = useHttps ? https.request : http.request;
