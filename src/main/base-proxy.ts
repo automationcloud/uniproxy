@@ -243,6 +243,7 @@ export class BaseProxy {
         const [connectRes, socket] = await new Promise<[http.IncomingMessage, net.Socket]>((resolve, reject) => {
             connectReq.on('error', reject);
             connectReq.on('connect', (connectRes: http.IncomingMessage, remoteSocket: net.Socket) => resolve([connectRes, remoteSocket]));
+            connectReq.end();
         });
         if (connectRes.statusCode! >= 400) {
             const error = new ProxyConnectionFailed(`Proxy returned ${connectRes.statusCode} ${connectRes.statusMessage}`, {
