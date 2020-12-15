@@ -23,7 +23,7 @@ import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed } from './com
  */
 export class HttpsProxyAgent extends https.Agent {
     constructor(
-        readonly proxy: ProxyUpstream,
+        readonly upstream: ProxyUpstream,
         options: https.AgentOptions = {}
     ) {
         super({
@@ -34,7 +34,7 @@ export class HttpsProxyAgent extends https.Agent {
     }
 
     createConnection(options: any, cb: (err: Error | null, socket?: net.Socket) => void) {
-        const [hostname, port] = this.proxy.host.split(':');
+        const [hostname, port] = this.upstream.host.split(':');
         const connectReq = http.request({
             method: 'connect',
             hostname,
@@ -44,15 +44,12 @@ export class HttpsProxyAgent extends https.Agent {
                 host: options.host,
             },
         });
-        if (this.proxy.username || this.proxy.password) {
-            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.proxy));
+        if (this.upstream.username || this.upstream.password) {
+            connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.upstream));
         }
         connectReq.on('connect', (res: http.IncomingMessage, socket: net.Socket) => {
             if (res.statusCode !== 200) {
-                const err = new ProxyConnectionFailed(`Proxy returned ${res.statusCode} ${res.statusMessage}`, {
-                    proxy: this.proxy,
-                    statusCode: res.statusCode,
-                });
+                const err = new ProxyConnectionFailed(this.upstream, res.statusCode!);
                 return cb(err);
             }
             const tlsSocket = tls.connect({
@@ -77,7 +74,7 @@ export class HttpsProxyAgent extends https.Agent {
  */
 export class HttpProxyAgent extends http.Agent {
     constructor(
-        readonly proxy: ProxyUpstream,
+        readonly upstream: ProxyUpstream,
         options: http.AgentOptions = {}
     ) {
         super({
@@ -91,14 +88,14 @@ export class HttpProxyAgent extends http.Agent {
         req.shouldKeepAlive = false;
         (req as any).path = options.href;
         const socket = this.createConnection(options);
-        if (this.proxy.username || this.proxy.password) {
-            req.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.proxy));
+        if (this.upstream.username || this.upstream.password) {
+            req.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.upstream));
         }
         req.onSocket(socket);
     }
 
     createConnection(_options: any) {
-        const [hostname, port] = this.proxy.host.split(':');
+        const [hostname, port] = this.upstream.host.split(':');
         const socket = net.createConnection({
             host: hostname,
             port: Number(port) || 80,

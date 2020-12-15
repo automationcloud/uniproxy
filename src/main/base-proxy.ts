@@ -193,7 +193,7 @@ export class BaseProxy {
             ]);
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
-            const statusCode = (error as any).details?.statusCode ?? 502;
+            const statusCode = (error as any).status ?? 502;
             const statusText = STATUS_CODES[statusCode];
             try {
                 clientSocket.write(`HTTP/${req.httpVersion} ${statusCode} ${statusText}\r\n\r\n`);
@@ -246,10 +246,7 @@ export class BaseProxy {
             connectReq.end();
         });
         if (connectRes.statusCode! >= 400) {
-            const error = new ProxyConnectionFailed(`Proxy returned ${connectRes.statusCode} ${connectRes.statusMessage}`, {
-                upstream,
-                statusCode: connectRes.statusCode
-            });
+            const error = new ProxyConnectionFailed(upstream, connectRes.statusCode!);
             throw error;
         }
         const connectionId = String(connectRes.headers['x-connection-id']) || Math.random().toString(36).substring(2);

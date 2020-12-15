@@ -21,11 +21,13 @@ export function makeProxyUrl(config: ProxyUpstream) {
 }
 
 export class ProxyConnectionFailed extends Error {
+    status: number;
     details: any;
 
-    constructor(cause: string, details: any) {
-        super(`Connection to upstream proxy failed: ${cause}`);
-        this.details = details;
+    constructor(upstream: ProxyUpstream, status: number) {
+        super(`Proxy connection failed: upstream returned ${status}`);
+        this.status = status;
+        this.details = { upstream, status };
     }
 }
 
