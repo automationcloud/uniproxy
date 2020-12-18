@@ -19,7 +19,7 @@ import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import { ProxyConfig } from './config';
+import { Connection, ProxyConfig } from './config';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -59,7 +59,6 @@ export class SslBumpProxy extends BaseProxy {
 
     sslBumpConfig: SslBumpConfig;
     certStore: SslCertStore;
-    remoteConnectionsMap = new Map<string, net.Socket>();
 
     constructor(config: SslBumpConfig & Partial<ProxyConfig>) {
         super(config);
@@ -79,9 +78,9 @@ export class SslBumpProxy extends BaseProxy {
             const port = Number(_port) || 443;
             const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
             const upstream = this.matchRoute(targetHost, req);
-            const remoteConn = await this.createSslConnection(targetHost, upstream);
-            const tlsRemoteSocket = await this.negotiateTls(remoteConn.socket, hostname, port);
-            await this.replyToConnectRequest(clientSocket, remoteConn);
+            const connection = await this.createSslConnection(targetHost, upstream);
+            const tlsRemoteSocket = await this.negotiateTls(connection.socket, hostname, port);
+            await this.replyToConnectRequest(clientSocket, connection);
             tlsRemoteSocket.on('close', () => {
                 if (!tlsClientSocket.destroyed) {
                     tlsClientSocket.end();
@@ -92,7 +91,7 @@ export class SslBumpProxy extends BaseProxy {
                     tlsRemoteSocket.end();
                 }
             });
-            await this.handleTls(tlsClientSocket, tlsRemoteSocket, req);
+            await this.handleTls(tlsClientSocket, tlsRemoteSocket, connection);
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
             const statusCode = (error as any).status ?? 502;
@@ -114,9 +113,9 @@ export class SslBumpProxy extends BaseProxy {
      *
      * @param tlsClientSocket A client TLS socket, who initiated the SSL transaction
      * @param tlsRemoteSocket A remote server TLS socket (i.e. the target website)
-     * @param connectReq A CONNECT request which originated the SSL transaction
+     * @param connection A established outward Connection instance (contains connectionId, host and initial socket)
      */
-    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, connectReq: http.IncomingMessage): Promise<void> {
+    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, connection: Connection): Promise<void> {
         await Promise.all([
             pipelineAsync(tlsClientSocket, tlsRemoteSocket),
             pipelineAsync(tlsRemoteSocket, tlsClientSocket),

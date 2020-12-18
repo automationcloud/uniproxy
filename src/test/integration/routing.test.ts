@@ -2,6 +2,7 @@ import { HttpProxyAgent, HttpsProxyAgent, RoutingProxy } from '../../main';
 import { HTTPS_PORT, HTTP_PORT } from '../env';
 import { UpstreamProxy } from '../upstream';
 import fetch from 'node-fetch';
+import https from 'https';
 import assert from 'assert';
 import { certificate } from '../certs';
 
@@ -111,6 +112,55 @@ describe('Routing Proxy', () => {
             assert.strictEqual(text, 'You requested GET /foo over https');
             assert(fooProxy.interceptedConnectRequest == null);
             assert(barProxy.interceptedConnectRequest == null);
+        });
+
+        it('tracks established SSL connections', async () => {
+            // Initially not tracked
+            assert.strictEqual(routingProxy.trackedConnections.size, 0);
+            assert.strictEqual(fooProxy.trackedConnections.size, 0);
+            // Now we fire a request and keep the connection open
+            // Note: we need fine-grained control over network here, so basic http is used.
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            }, {
+                ca: certificate,
+                keepAlive: true,
+            });
+            const request = https.request({
+                host: 'foo.local',
+                port: HTTPS_PORT,
+                href: `/foo`,
+                agent,
+                method: 'post',
+            });
+            request.end('Some body');
+            await new Promise(r => request.on('response', r));
+            // Connection should now be tracked by relevant proxies
+            assert.strictEqual(routingProxy.trackedConnections.size, 1);
+            assert.strictEqual(fooProxy.trackedConnections.size, 1);
+            assert.strictEqual(barProxy.trackedConnections.size, 0);
+            // Connection ID should be the same
+            const connectionId = routingProxy.trackedConnections.keys().next().value;
+            assert.ok(fooProxy.trackedConnections.get(connectionId));
+            // Finally, destroy the socket and make sure connection is no longer tracked
+            await new Promise(r => {
+                request.socket?.on('close', r);
+                request.socket?.end();
+            });
+            // Wait for connections to become untracked
+            const timeoutAt = Date.now() + 1000;
+            while (Date.now() < timeoutAt) {
+                await new Promise(r => setTimeout(r, 1));
+                const totalConnectionsSize = [
+                    routingProxy.trackedConnections.size,
+                    fooProxy.trackedConnections.size,
+                    barProxy.trackedConnections.size,
+                ].reduce((a, b) => a + b, 0);
+                if (totalConnectionsSize === 0) {
+                    return;
+                }
+            }
+            throw new Error('Expected all connections to close');
         });
 
     });
