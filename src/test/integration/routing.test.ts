@@ -1,8 +1,9 @@
-import { HttpProxyAgent, HttpsProxyAgent, RoutingProxy } from '../../main';
+import { HttpProxyAgent, HttpsProxyAgent, ProxyUpstream, RoutingProxy } from '../../main';
 import { HTTPS_PORT, HTTP_PORT } from '../env';
 import { UpstreamProxy } from '../upstream';
 import fetch from 'node-fetch';
 import https from 'https';
+import http from 'http';
 import assert from 'assert';
 import { certificate } from '../certs';
 
@@ -161,6 +162,35 @@ describe('Routing Proxy', () => {
                 }
             }
             throw new Error('Expected all connections to close');
+        });
+
+        describe('partitionId', () => {
+
+            // This proxy will act as a pass-through proxy which will include partitionId in its CONNECT request
+            const partitionProxy = new (class extends RoutingProxy {
+                matchRoute() {
+                    return { host: `localhost:${routingProxy.getServerPort()}` };
+                }
+                createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
+                    const req = super.createConnectRequest(inboundConnectReq, upstream);
+                    req.setHeader('x-partition-id', 'Hola Amigo');
+                    return req;
+                }
+            })();
+            beforeEach(() => partitionProxy.start(0));
+            afterEach(() => partitionProxy.shutdown(true));
+
+            it('propagates x-partition-id header to upstreams', async () => {
+                const agent = new HttpsProxyAgent({
+                    host: `localhost:${partitionProxy.getServerPort()}`,
+                }, { ca: certificate });
+                const res = await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
+                const text = await res.text();
+                assert.strictEqual(text, 'You requested GET /foo over https');
+                assert.ok(fooProxy.interceptedConnectRequest);
+                assert.strictEqual(fooProxy.interceptedConnectRequest.headers['x-partition-id'], 'Hola Amigo');
+            });
+
         });
 
     });

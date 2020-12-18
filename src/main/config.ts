@@ -58,7 +58,8 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
  */
 export interface Connection {
     connectionId: string;
-    host: string;
+    partitionId?: string;
     upstream: ProxyUpstream | null;
     socket: net.Socket;
+    host: string;
 }

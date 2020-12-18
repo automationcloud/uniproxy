@@ -183,9 +183,8 @@ export class BaseProxy {
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             // Note: CONNECT request's url always contains Host (hostname:port)
-            const targetHost = req.url ?? '';
-            const upstream = this.matchRoute(targetHost, req);
-            const remoteConn = await this.createSslConnection(targetHost, upstream);
+            const upstream = this.matchRoute(req.url!, req);
+            const remoteConn = await this.createSslConnection(req, upstream);
             await this.replyToConnectRequest(clientSocket, remoteConn);
             await Promise.all([
                 pipelineAsync(remoteConn.socket, clientSocket),
@@ -225,21 +224,26 @@ export class BaseProxy {
     /**
      * Creates an onward connection to `host` either directly or via upstream `proxy`.
      */
-    async createSslConnection(host: string, upstream: ProxyUpstream | null): Promise<Connection> {
+    async createSslConnection(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream | null): Promise<Connection> {
         const connection = upstream ?
-            await this.sslProxyConnect(host, upstream) :
-            await this.sslDirectConnect(host);
+            await this.sslProxyConnect(inboundConnectReq, upstream) :
+            await this.sslDirectConnect(inboundConnectReq);
         const { connectionId, socket } = connection;
         this.trackedConnections.set(connectionId, connection);
         socket.on('close', () => this.trackedConnections.delete(connectionId));
+        const partitionId = String(inboundConnectReq.headers['x-partition-id']);
+        if (partitionId) {
+            connection.partitionId = partitionId;
+        }
         return connection;
     }
 
     /**
      * Creates a connection to `host` using specified `upstream`.
      */
-    protected async sslProxyConnect(host: string, upstream: ProxyUpstream): Promise<Connection> {
-        const connectReq = this.createConnectRequest(host, upstream);
+    protected async sslProxyConnect(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): Promise<Connection> {
+        const host = inboundConnectReq.url!;
+        const connectReq = this.createConnectRequest(inboundConnectReq, upstream);
         const [connectRes, socket] = await new Promise<[http.IncomingMessage, net.Socket]>((resolve, reject) => {
             connectReq.on('error', reject);
             connectReq.on('connect', (connectRes: http.IncomingMessage, remoteSocket: net.Socket) => resolve([connectRes, remoteSocket]));
@@ -257,7 +261,8 @@ export class BaseProxy {
     /**
      * Creates a connection to `host` directly (without proxy).
      */
-    protected async sslDirectConnect(host: string): Promise<Connection> {
+    protected async sslDirectConnect(inboundConnectReq: http.IncomingMessage): Promise<Connection> {
+        const host = inboundConnectReq.url!;
         const connectionId = Math.random().toString(36).substring(2);
         const socket = await new Promise<net.Socket>((resolve, reject) => {
             const url = new URL('https://' + host);
@@ -272,7 +277,8 @@ export class BaseProxy {
     /**
      * Creates an onward CONNECT request to specified `targetHost` via specified `upstream` proxy.
      */
-    protected createConnectRequest(targetHost: string, upstream: ProxyUpstream): http.ClientRequest {
+    protected createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
+        const targetHost = inboundConnectReq.url!;
         const { useHttps = false } = upstream;
         const [hostname, port] = upstream.host.split(':');
         const request = useHttps ? https.request : http.request;
@@ -288,6 +294,10 @@ export class BaseProxy {
         } as any);
         if (upstream.username || upstream.password) {
             connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
+        }
+        const partitionId = inboundConnectReq.headers['x-partition-id'];
+        if (partitionId) {
+            connectReq.setHeader('X-Partition-Id', partitionId);
         }
         return connectReq;
     }

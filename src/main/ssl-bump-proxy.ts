@@ -78,7 +78,7 @@ export class SslBumpProxy extends BaseProxy {
             const port = Number(_port) || 443;
             const tlsClientSocket = this.certStore.bumpClientSocket(hostname, clientSocket);
             const upstream = this.matchRoute(targetHost, req);
-            const connection = await this.createSslConnection(targetHost, upstream);
+            const connection = await this.createSslConnection(req, upstream);
             const tlsRemoteSocket = await this.negotiateTls(connection.socket, hostname, port);
             await this.replyToConnectRequest(clientSocket, connection);
             tlsRemoteSocket.on('close', () => {
