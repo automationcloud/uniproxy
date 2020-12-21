@@ -72,6 +72,7 @@ export class SslBumpProxy extends BaseProxy {
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
+            await this.authenticate(req);
             // req.url always contains hostname:port
             const targetHost = req.url ?? '';
             const [hostname, _port] = targetHost.split(':');

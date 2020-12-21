@@ -181,8 +181,7 @@ export class BaseProxy {
     /**
      * A hook for authenticating proxy requests.
      */
-    async authenticate(req: http.IncomingMessage) {
-    }
+    async authenticate(req: http.IncomingMessage) {}
 
     // HTTPS
 
