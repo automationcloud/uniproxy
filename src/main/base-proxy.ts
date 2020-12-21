@@ -88,7 +88,7 @@ export class BaseProxy {
             maxHeaderSize: 65535
         },
     ) {
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             this.server = http
                 .createServer(options)
                 .on('connection', socket => this.onConnection(socket))
@@ -111,7 +111,7 @@ export class BaseProxy {
      * @param force if `true`, forcibly shuts all established client connections.
      */
     async shutdown(force: boolean = false) {
-        return new Promise(resolve => {
+        return new Promise<void>(resolve => {
             if (force) {
                 this.closeAllSockets();
             }
@@ -178,11 +178,18 @@ export class BaseProxy {
         method.call(this.logger, `Proxy error: ${error.message}`, { error });
     }
 
+    /**
+     * A hook for authenticating proxy requests.
+     */
+    async authenticate(req: http.IncomingMessage) {
+    }
+
     // HTTPS
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             // Note: CONNECT request's url always contains Host (hostname:port)
+            await this.authenticate(req);
             const upstream = this.matchRoute(req.url!, req);
             const remoteConn = await this.createSslConnection(req, upstream);
             await this.replyToConnectRequest(clientSocket, remoteConn);
@@ -204,7 +211,7 @@ export class BaseProxy {
     }
 
     protected async replyToConnectRequest(clientSocket: net.Socket, connection: Connection) {
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             const payload = [
                 `HTTP/1.1 200 OK`,
                 `X-Connection-Id: ${connection.connectionId}`,
@@ -306,6 +313,7 @@ export class BaseProxy {
 
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         try {
+            await this.authenticate(req);
             const { host } = new URL(req.url!);
             const upstream = this.matchRoute(host, req);
             const fwdReq = upstream ?
