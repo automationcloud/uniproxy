@@ -18,6 +18,7 @@ import net from 'net';
 import { pki, md } from 'node-forge';
 import { randomBytes } from 'crypto';
 import LRUCache from 'lru-cache';
+import { EventEmitter } from 'events';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -25,7 +26,7 @@ const DAY = 24 * HOUR;
 /**
  * A helper class for issuing temporary certificates and caching them as we go.
  */
-export class SslCertStore {
+export class SslCertStore extends EventEmitter {
 
     protected caCert: pki.Certificate;
     protected caCertPem: string;
@@ -39,6 +40,7 @@ export class SslCertStore {
     protected certPemCache: LRUCache<string, string>;
 
     constructor(config: SslBumpConfig) {
+        super();
         this.caCert = pki.certificateFromPem(config.caCert);
         this.caCertPem = pki.certificateToPem(this.caCert);
         this.caPrivateKey = pki.privateKeyFromPem(config.caPrivateKey);
@@ -125,7 +127,9 @@ export class SslCertStore {
             }
         ]);
         cert.sign(this.caPrivateKey, md.sha256.create());
-        return pki.certificateToPem(cert);
+        const pem = pki.certificateToPem(cert);
+        this.emit('certificateIssued', pem);
+        return pem;
     }
 
 }
