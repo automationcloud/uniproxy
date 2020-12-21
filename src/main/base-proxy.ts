@@ -328,7 +328,8 @@ export class BaseProxy {
             fwdRes.pipe(res);
         } catch (error) {
             this.onError(error, { handler: 'onRequest', url: req.url });
-            res.writeHead(599);
+            const statusCode = (error as any).status ?? 502;
+            res.writeHead(statusCode);
             res.end();
         }
     }
