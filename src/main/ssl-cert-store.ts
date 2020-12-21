@@ -128,7 +128,7 @@ export class SslCertStore extends EventEmitter {
         ]);
         cert.sign(this.caPrivateKey, md.sha256.create());
         const pem = pki.certificateToPem(cert);
-        this.emit('certificateIssued', pem);
+        this.emit('certificateIssued', { hostname, pem });
         return pem;
     }
 
