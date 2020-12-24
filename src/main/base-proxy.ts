@@ -96,12 +96,8 @@ export class BaseProxy {
                 .on('connect', (req, socket) => this.onConnect(req, socket))
                 .on('close', () => (this.server = null))
                 .listen(port, hostname);
-            this.server.on('listening', () => {
-                return resolve();
-            });
-            this.server.on('error', error => {
-                return reject(error);
-            });
+            this.server.on('listening', () => resolve());
+            this.server.on('error', error => reject(error));
         });
     }
 
@@ -217,13 +213,9 @@ export class BaseProxy {
                 '',
                 '',
             ].join('\r\n');
-            clientSocket.write(payload, err => {
-                if (err != null) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
+            clientSocket.write(payload);
+            clientSocket.once('error', reject);
+            resolve();
         });
     }
 
