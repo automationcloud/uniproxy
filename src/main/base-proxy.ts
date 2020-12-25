@@ -289,6 +289,7 @@ export class BaseProxy {
             timeout: 10000,
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
+            servername: hostname,
         } as any);
         if (upstream.username || upstream.password) {
             connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
