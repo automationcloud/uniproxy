@@ -49,12 +49,13 @@ export interface ProxyConfig {
 export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     defaultUpstream: null,
     logger: console,
-    muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
-    warnErrorCodes: ['ECONNRESET', 'EINVAL', 'ENOTCONN', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE'],
+    muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE', 'ERR_STREAM_DESTROYED', 'ECONNRESET', 'EINVAL'],
+    warnErrorCodes: ['ENOTCONN', 'ERR_STREAM_WRITE_AFTER_END', 'EPROTO'],
 };
 
 /**
- * Describes an established connection.
+ * Describes an outbound connection established by proxy instance.
+ * This can be either a direct connection to target host, or a connection to an upstream proxy.
  */
 export interface Connection {
     connectionId: string;

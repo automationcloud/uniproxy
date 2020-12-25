@@ -82,16 +82,8 @@ export class SslBumpProxy extends BaseProxy {
             const connection = await this.createSslConnection(req, upstream);
             const tlsRemoteSocket = await this.negotiateTls(connection.socket, hostname, port);
             await this.replyToConnectRequest(clientSocket, connection);
-            tlsRemoteSocket.on('close', () => {
-                if (!tlsClientSocket.destroyed) {
-                    tlsClientSocket.end();
-                }
-            });
-            tlsClientSocket.on('close', () => {
-                if (!tlsRemoteSocket.destroyed) {
-                    tlsRemoteSocket.end();
-                }
-            });
+            tlsRemoteSocket.on('close', () => tlsClientSocket.end());
+            tlsClientSocket.on('close', () => tlsRemoteSocket.end());
             await this.handleTls(tlsClientSocket, tlsRemoteSocket, connection);
         } catch (error) {
             this.onError(error, { handler: 'onConnect', url: req.url });
