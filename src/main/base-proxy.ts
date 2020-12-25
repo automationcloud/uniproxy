@@ -229,7 +229,7 @@ export class BaseProxy {
         const { connectionId, socket } = connection;
         this.trackedConnections.set(connectionId, connection);
         socket.on('close', () => this.trackedConnections.delete(connectionId));
-        const partitionId = String(inboundConnectReq.headers['x-partition-id']);
+        const partitionId = String(inboundConnectReq.headers['x-partition-id'] || '');
         if (partitionId) {
             connection.partitionId = partitionId;
         }
@@ -251,7 +251,8 @@ export class BaseProxy {
             const error = new ProxyConnectionFailed(upstream, connectRes.statusCode!);
             throw error;
         }
-        const connectionId = String(connectRes.headers['x-connection-id']) || Math.random().toString(36).substring(2);
+        const connectionIdHeader = String(connectRes.headers['x-connection-id'] || '');
+        const connectionId = connectionIdHeader || Math.random().toString(36).substring(2);
         const connection: Connection = { connectionId, host, upstream, socket };
         return connection;
     }
