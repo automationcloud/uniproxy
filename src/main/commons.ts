@@ -1,4 +1,5 @@
 import http from 'http';
+import { Exception } from './exception';
 
 export interface ProxyUpstream {
     host: string;
@@ -20,7 +21,7 @@ export function makeProxyUrl(config: ProxyUpstream) {
     return `${protocol}//${auth}${config.host}`;
 }
 
-export class ProxyConnectionFailed extends Error {
+export class ProxyConnectionFailed extends Exception {
     status: number;
     details: any;
 

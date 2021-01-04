@@ -20,6 +20,7 @@ import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
 import { Connection, ProxyConfig } from './config';
+import { Exception } from './exception';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -168,7 +169,7 @@ export interface SslBumpConfig {
     certCacheMaxEntries: number;
 }
 
-export class RemoteConnectionNotAuthorized extends Error {
+export class RemoteConnectionNotAuthorized extends Exception {
     details: any;
 
     constructor(cause: Error) {
