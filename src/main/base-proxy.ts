@@ -18,7 +18,7 @@ import net from 'net';
 import tls from 'tls';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed } from './commons';
+import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed, ProxyConnectionTimeout } from './commons';
 import { Logger } from './logger';
 import { Connection, DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 
@@ -40,6 +40,9 @@ export class BaseProxy {
     logger: Logger;
     muteErrorCodes: string[];
     warnErrorCodes: string[];
+    connectRetryAttempts: number;
+    connectRetryInterval: number;
+    connectTimeout: number;
 
     constructor(options: Partial<ProxyConfig> = {}) {
         const config = { ...DEFAULT_PROXY_CONFIG, ...options };
@@ -47,6 +50,9 @@ export class BaseProxy {
         this.logger = config.logger;
         this.muteErrorCodes = config.muteErrorCodes;
         this.warnErrorCodes = config.warnErrorCodes;
+        this.connectRetryAttempts = config.connectRetryAttempts;
+        this.connectRetryInterval = config.connectRetryInterval;
+        this.connectTimeout = config.connectTimeout;
     }
 
     /**
@@ -112,7 +118,7 @@ export class BaseProxy {
                 this.closeAllSockets();
             }
             if (this.server) {
-                this.server.once('close', resolve);
+                this.server.on('close', resolve);
                 this.server.close();
                 this.server = null;
             } else {
@@ -151,7 +157,7 @@ export class BaseProxy {
      */
     protected onConnection(socket: net.Socket) {
         this.clientSockets.add(socket);
-        socket.once('close', () => this.clientSockets.delete(socket));
+        socket.on('close', () => this.clientSockets.delete(socket));
     }
 
     /**
@@ -214,7 +220,7 @@ export class BaseProxy {
                 '',
             ].join('\r\n');
             clientSocket.write(payload);
-            clientSocket.once('error', reject);
+            clientSocket.on('error', reject);
             resolve();
         });
     }
@@ -223,9 +229,7 @@ export class BaseProxy {
      * Creates an onward connection to `host` either directly or via upstream `proxy`.
      */
     async createSslConnection(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream | null): Promise<Connection> {
-        const connection = upstream ?
-            await this.sslProxyConnect(inboundConnectReq, upstream) :
-            await this.sslDirectConnect(inboundConnectReq);
+        const connection = await this.sslConnectWithRetry(inboundConnectReq, upstream);
         const { connectionId, socket } = connection;
         this.trackedConnections.set(connectionId, connection);
         socket.on('close', () => this.trackedConnections.delete(connectionId));
@@ -237,6 +241,52 @@ export class BaseProxy {
     }
 
     /**
+     * Wraps establishing onward connections with retry logic as follows:
+     *
+     * - first, a single connection attempt is made
+     * - if that fails or it takes longer than specified interval, a subsequent connection is made
+     * - this process is repeated up to max amount of attempts as per configur
+     * - the first successfully established connection is resolved; any other connections established after that are destroyed
+     * - each connection attempt is capped to timeout as per config
+     */
+    protected sslConnectWithRetry(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream | null): Promise<Connection> {
+        return new Promise((resolve, reject) => {
+            // Connection attempts are scheduled using timers, which allows us to cancel them if necessary
+            const timers: any[] = [];
+            // As soon as the first connection resolves, we cancel all other scheduled attempts and destroy all other connections
+            let resolved = false;
+            // We also count the number of already resolved/rejected promises to be able to throw the error
+            let pending = this.connectRetryAttempts - 1;
+            const tryConnect = async () => {
+                try {
+                    const connection = upstream ?
+                        await this.sslProxyConnect(inboundConnectReq, upstream) :
+                        await this.sslDirectConnect(inboundConnectReq);
+                    if (resolved) {
+                        connection.socket.destroy();
+                        return;
+                    }
+                    resolved = true;
+                    for (const timer of timers) {
+                        clearTimeout(timer);
+                    }
+                    resolve(connection);
+                } catch (err) {
+                    if (pending < 1) {
+                        reject(err);
+                    }
+                } finally {
+                    pending -= 1;
+                }
+            };
+            // Finally, actually schedule the connection attempts
+            for (let i = 0; i < this.connectRetryAttempts; i++) {
+                timers.push(setTimeout(tryConnect, i * this.connectRetryInterval));
+            }
+        });
+    }
+
+    /**
      * Creates a connection to `host` using specified `upstream`.
      */
     protected async sslProxyConnect(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): Promise<Connection> {
@@ -244,6 +294,12 @@ export class BaseProxy {
         const connectReq = this.createConnectRequest(inboundConnectReq, upstream);
         const [connectRes, socket] = await new Promise<[http.IncomingMessage, net.Socket]>((resolve, reject) => {
             connectReq.on('error', reject);
+            connectReq.on('timeout', () => {
+                if (connectReq.socket) {
+                    connectReq.socket.end();
+                }
+                reject(new ProxyConnectionTimeout(upstream));
+            });
             connectReq.on('connect', (connectRes: http.IncomingMessage, remoteSocket: net.Socket) => resolve([connectRes, remoteSocket]));
             connectReq.end();
         });
@@ -267,8 +323,12 @@ export class BaseProxy {
             const url = new URL('https://' + host);
             const port = Number(url.port) || 443;
             const socket = net.connect(port, url.hostname);
-            socket.once('error', reject);
-            socket.once('connect', () => resolve(socket));
+            socket.on('error', reject);
+            socket.on('connect', () => resolve(socket));
+            socket.on('timeout', () => {
+                socket.end();
+                reject(new ProxyConnectionTimeout(null));
+            });
         });
         return { connectionId, host, socket, upstream: null };
     }
@@ -287,7 +347,7 @@ export class BaseProxy {
             path: targetHost,
             method: 'CONNECT',
             headers: { host: targetHost },
-            timeout: 10000,
+            timeout: this.connectTimeout,
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
             servername: hostname,
@@ -314,8 +374,8 @@ export class BaseProxy {
                 this.createDirectHttpRequest(req);
             req.pipe(fwdReq);
             const fwdRes = await new Promise<http.IncomingMessage>((resolve, reject) => {
-                fwdReq.once('error', reject);
-                fwdReq.once('response', fwdRes => resolve(fwdRes));
+                fwdReq.on('error', reject);
+                fwdReq.on('response', fwdRes => resolve(fwdRes));
             });
             res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
             fwdRes.pipe(res);
@@ -329,12 +389,13 @@ export class BaseProxy {
 
     protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyUpstream): http.ClientRequest {
         const [hostname, port] = proxy.host.split(':');
-        const options = {
+        const options: http.RequestOptions = {
             hostname,
             port,
             path: req.url,
             method: req.method,
             headers: req.headers,
+            timeout: this.connectTimeout,
         };
         const fwdReq = proxy.useHttps ?
             https.request({ ...options, ca: this.getCACertificates() }) :
@@ -353,6 +414,7 @@ export class BaseProxy {
             path: pathname + search,
             method: req.method,
             headers: req.headers,
+            timeout: this.connectTimeout,
         });
     }
 

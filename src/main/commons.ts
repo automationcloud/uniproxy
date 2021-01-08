@@ -28,7 +28,16 @@ export class ProxyConnectionFailed extends Exception {
     constructor(upstream: ProxyUpstream, status: number) {
         super(`Proxy connection failed: upstream returned ${status}`);
         this.status = status;
-        this.details = { upstream, status };
+        this.details = { upstream: { ...upstream, password: '' }, status };
+    }
+}
+
+export class ProxyConnectionTimeout extends Exception {
+    details: any;
+
+    constructor(upstream: ProxyUpstream | null) {
+        super(`Proxy connection timeout`);
+        this.details = { upstream: { ...upstream, password: '' } };
     }
 }
 

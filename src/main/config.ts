@@ -44,6 +44,21 @@ export interface ProxyConfig {
      * to be treated as warnings istead of errors.
      */
     warnErrorCodes: string[];
+
+    /**
+     * Number of times to retry outbound connections until giving up.
+     */
+    connectRetryAttempts: number;
+
+    /**
+     * Interval between retrying to establish outbound connections.
+     */
+    connectRetryInterval: number;
+
+    /**
+     * Timeout for establishing outbound connections.
+     */
+    connectTimeout: number;
 }
 
 export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
@@ -51,6 +66,9 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     logger: console,
     muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE', 'ERR_STREAM_DESTROYED', 'ECONNRESET', 'EINVAL'],
     warnErrorCodes: ['ENOTCONN', 'ERR_STREAM_WRITE_AFTER_END', 'EPROTO'],
+    connectRetryAttempts: 4,
+    connectRetryInterval: 1000,
+    connectTimeout: 10000,
 };
 
 /**

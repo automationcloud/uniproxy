@@ -2,6 +2,6 @@
     "reporter": "spec",
     "spec": "./out/**/*.test.js",
     "slow": 200,
-    "timeout": 1000,
+    "timeout": 2000,
     "exit": true
 }
