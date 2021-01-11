@@ -21,6 +21,7 @@ import { promisify } from 'util';
 import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed, ProxyConnectionTimeout } from './commons';
 import { Logger } from './logger';
 import { Connection, DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
+import { ProxyStats } from './stats';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -43,6 +44,7 @@ export class BaseProxy {
     connectRetryAttempts: number;
     connectRetryInterval: number;
     connectTimeout: number;
+    stats = new ProxyStats();
 
     constructor(options: Partial<ProxyConfig> = {}) {
         const config = { ...DEFAULT_PROXY_CONFIG, ...options };
@@ -188,8 +190,8 @@ export class BaseProxy {
     // HTTPS
 
     async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+        // Note: CONNECT request's url always contains Host (hostname:port)
         try {
-            // Note: CONNECT request's url always contains Host (hostname:port)
             await this.authenticate(req);
             const upstream = this.matchRoute(req.url!, req);
             const remoteConn = await this.createSslConnection(req, upstream);
@@ -245,7 +247,7 @@ export class BaseProxy {
      *
      * - first, a single connection attempt is made
      * - if that fails or it takes longer than specified interval, a subsequent connection is made
-     * - this process is repeated up to max amount of attempts as per configur
+     * - this process is repeated up to max amount of attempts as per config
      * - the first successfully established connection is resolved; any other connections established after that are destroyed
      * - each connection attempt is capped to timeout as per config
      */
@@ -256,16 +258,23 @@ export class BaseProxy {
             // As soon as the first connection resolves, we cancel all other scheduled attempts and destroy all other connections
             let resolved = false;
             // We also count the number of already resolved/rejected promises to be able to throw the error
+            let scheduled = 0;
             let pending = this.connectRetryAttempts - 1;
             const tryConnect = async () => {
                 try {
+                    if (scheduled > 0) {
+                        this.stats.connectRetries += 1;
+                    }
+                    scheduled += 1;
                     const connection = upstream ?
                         await this.sslProxyConnect(inboundConnectReq, upstream) :
                         await this.sslDirectConnect(inboundConnectReq);
                     if (resolved) {
+                        // This connection lost the race, so is no longer needed
                         connection.socket.destroy();
                         return;
                     }
+                    // This connection won the race, so we cancel all previously scheduled connections
                     resolved = true;
                     for (const timer of timers) {
                         clearTimeout(timer);
@@ -273,6 +282,7 @@ export class BaseProxy {
                     resolve(connection);
                 } catch (err) {
                     if (pending < 1) {
+                        // No more attempts left at this point
                         reject(err);
                     }
                 } finally {

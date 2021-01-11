@@ -45,6 +45,8 @@ describe('Retry on connect', () => {
             assert.strictEqual(text, 'You requested GET /foo over https');
             assert.ok(upstream.interceptedConnectRequest);
             assert.strictEqual(upstream.interceptedConnectRequest?.url, `localhost:${HTTPS_PORT}`);
+            assert(proxy.stats.connectRetries > 0);
+            assert(upstream.stats.connectRetries === 0);
         });
 
         it('fails if runs out of attempts', async () => {
@@ -58,6 +60,8 @@ describe('Retry on connect', () => {
                 throw new Error('UnexpectedSuccess');
             } catch (err) {
                 assert.strict(err.name, 'FetchError');
+                assert(proxy.stats.connectRetries > 0);
+                assert(upstream.stats.connectRetries === 0);
             }
         });
 
@@ -81,6 +85,8 @@ describe('Retry on connect', () => {
             assert.strictEqual(text, 'You requested GET /foo over https');
             assert.ok(upstream.interceptedConnectRequest);
             assert.strictEqual(upstream.interceptedConnectRequest?.url, `localhost:${HTTPS_PORT}`);
+            assert(proxy.stats.connectRetries > 0);
+            assert(upstream.stats.connectRetries === 0);
         });
 
         it('fails if runs out of attempts', async () => {
@@ -93,6 +99,8 @@ describe('Retry on connect', () => {
                 throw new Error('UnexpectedSuccess');
             } catch (err) {
                 assert.strict(err.name, 'FetchError');
+                assert(proxy.stats.connectRetries > 0);
+                assert(upstream.stats.connectRetries === 0);
             }
         });
 
