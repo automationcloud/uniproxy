@@ -14,9 +14,13 @@ export class UpstreamProxy extends BaseProxy {
     // For testing connection delays or interruptions
     errorOnConnect: Error | null = null;
     delayOnConnect: number = 0;
+    connectAttempts: number = 0;
 
     constructor() {
         super({ logger: testLogger });
+        this.on('outboundConnect', params => {
+            this.connectAttempts += 1;
+        });
     }
 
     getCACertificates() {

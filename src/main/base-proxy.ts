@@ -21,7 +21,7 @@ import { promisify } from 'util';
 import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed, ProxyConnectionTimeout } from './commons';
 import { Logger } from './logger';
 import { Connection, DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
-import { ProxyStats } from './stats';
+import { EventEmitter } from 'events';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -32,7 +32,7 @@ const pipelineAsync = promisify(pipeline);
  * and routing such traffic either to a target destination (i.e. the website),
  * or to the next proxy in chain (aka "upstream" proxy).
  */
-export class BaseProxy {
+export class BaseProxy extends EventEmitter {
     server: http.Server | null = null;
     clientSockets: Set<net.Socket> = new Set();
     trackedConnections: Map<string, Connection> = new Map();
@@ -44,9 +44,9 @@ export class BaseProxy {
     connectRetryAttempts: number;
     connectRetryInterval: number;
     connectTimeout: number;
-    stats = new ProxyStats();
 
     constructor(options: Partial<ProxyConfig> = {}) {
+        super();
         const config = { ...DEFAULT_PROXY_CONFIG, ...options };
         this.defaultUpstream = config.defaultUpstream;
         this.logger = config.logger;
@@ -258,14 +258,10 @@ export class BaseProxy {
             // As soon as the first connection resolves, we cancel all other scheduled attempts and destroy all other connections
             let resolved = false;
             // We also count the number of already resolved/rejected promises to be able to throw the error
-            let scheduled = 0;
             let pending = this.connectRetryAttempts - 1;
-            const tryConnect = async () => {
+            const tryConnect = async (attempt: number) => {
                 try {
-                    if (scheduled > 0) {
-                        this.stats.connectRetries += 1;
-                    }
-                    scheduled += 1;
+                    this.emit('outboundConnect', { inboundConnectReq, upstream, attempt });
                     const connection = upstream ?
                         await this.sslProxyConnect(inboundConnectReq, upstream) :
                         await this.sslDirectConnect(inboundConnectReq);
@@ -291,7 +287,7 @@ export class BaseProxy {
             };
             // Finally, actually schedule the connection attempts
             for (let i = 0; i < this.connectRetryAttempts; i++) {
-                timers.push(setTimeout(tryConnect, i * this.connectRetryInterval));
+                timers.push(setTimeout(tryConnect.bind(this, i), i * this.connectRetryInterval));
             }
         });
     }
