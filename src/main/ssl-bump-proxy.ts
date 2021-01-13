@@ -87,7 +87,7 @@ export class SslBumpProxy extends BaseProxy {
             tlsClientSocket.on('close', () => tlsRemoteSocket.end());
             await this.handleTls(tlsClientSocket, tlsRemoteSocket, connection);
         } catch (error) {
-            this.onError(error, { handler: 'onConnect', url: req.url });
+            this.onError(error, { method: req.method, url: req.url });
             const statusCode = (error as any).status ?? 502;
             const statusText = http.STATUS_CODES[statusCode];
             try {

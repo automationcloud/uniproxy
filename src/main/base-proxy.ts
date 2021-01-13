@@ -175,8 +175,8 @@ export class BaseProxy extends EventEmitter {
         const isWarn = this.warnErrorCodes.includes(error.code);
         error.details = {
             proxyClass: this.constructor.name,
-            ...details,
             ...error.details,
+            ...details,
         };
         const method = isWarn ? this.logger.warn : this.logger.error;
         method.call(this.logger, `Proxy error: ${error.message}`, { error });
@@ -201,7 +201,7 @@ export class BaseProxy extends EventEmitter {
                 pipelineAsync(clientSocket, remoteConn.socket),
             ]);
         } catch (error) {
-            this.onError(error, { handler: 'onConnect', url: req.url });
+            this.onError(error, { method: req.method, url: req.url });
             const statusCode = (error as any).status ?? 502;
             const statusText = STATUS_CODES[statusCode];
             try {
@@ -276,10 +276,10 @@ export class BaseProxy extends EventEmitter {
                         clearTimeout(timer);
                     }
                     resolve(connection);
-                } catch (err) {
+                } catch (error) {
                     if (pending < 1) {
                         // No more attempts left at this point
-                        reject(err);
+                        reject(error);
                     }
                 } finally {
                     pending -= 1;
@@ -386,7 +386,7 @@ export class BaseProxy extends EventEmitter {
             res.writeHead(fwdRes.statusCode ?? 599, fwdRes.headers);
             fwdRes.pipe(res);
         } catch (error) {
-            this.onError(error, { handler: 'onRequest', url: req.url });
+            this.onError(error, { method: req.method, url: req.url });
             const statusCode = (error as any).status ?? 502;
             res.writeHead(statusCode);
             res.end();
