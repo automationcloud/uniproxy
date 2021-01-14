@@ -1,6 +1,6 @@
 {
     "name": "@automationcloud/uniproxy",
-    "version": "1.6.2",
+    "version": "1.7.0",
     "description": "Universal Proxy 🦄",
     "author": "ubio",
     "main": "out/main/index.js",
