@@ -66,7 +66,7 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     logger: console,
     muteErrorCodes: ['EPIPE', 'ERR_STREAM_PREMATURE_CLOSE', 'ERR_STREAM_DESTROYED', 'ECONNRESET', 'EINVAL'],
     warnErrorCodes: ['ENOTCONN', 'ERR_STREAM_WRITE_AFTER_END', 'EPROTO'],
-    connectRetryAttempts: 2,
+    connectRetryAttempts: 0,
     connectRetryInterval: 1000,
     connectTimeout: 10000,
 };

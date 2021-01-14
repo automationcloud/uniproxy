@@ -31,6 +31,7 @@ describe('Retry on connect', () => {
 
         beforeEach(() => {
             upstream.delayOnConnect = 60000;
+            proxy.connectRetryAttempts = 1;
             proxy.connectRetryInterval = 100;
         });
 
@@ -51,7 +52,7 @@ describe('Retry on connect', () => {
 
         it('fails if runs out of attempts', async () => {
             proxy.connectTimeout = 100;
-            proxy.connectRetryAttempts = 2;
+            proxy.connectRetryAttempts = 1;
             const agent = new HttpsProxyAgent({
                 host: `localhost:${proxy.getServerPort()}`,
             }, { ca: certificate });
@@ -71,6 +72,7 @@ describe('Retry on connect', () => {
 
         beforeEach(() => {
             upstream.errorOnConnect = new Error('Boom');
+            proxy.connectRetryAttempts = 1;
             proxy.connectRetryInterval = 100;
         });
 
@@ -90,7 +92,7 @@ describe('Retry on connect', () => {
         });
 
         it('fails if runs out of attempts', async () => {
-            proxy.connectRetryAttempts = 2;
+            proxy.connectRetryAttempts = 1;
             const agent = new HttpsProxyAgent({
                 host: `localhost:${proxy.getServerPort()}`,
             }, { ca: certificate });

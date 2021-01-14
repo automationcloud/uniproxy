@@ -252,15 +252,17 @@ export class BaseProxy extends EventEmitter {
      * - each connection attempt is capped to timeout as per config
      */
     protected sslConnectWithRetry(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream | null): Promise<Connection> {
+        const totalAttempts = this.connectRetryAttempts + 1;
         return new Promise((resolve, reject) => {
             // Connection attempts are scheduled using timers, which allows us to cancel them if necessary
             const timers: any[] = [];
             // As soon as the first connection resolves, we cancel all other scheduled attempts and destroy all other connections
             let resolved = false;
             // We also count the number of already resolved/rejected promises to be able to throw the error
-            let pending = this.connectRetryAttempts - 1;
+            let pending = totalAttempts;
             const tryConnect = async (attempt: number) => {
                 try {
+                    pending -= 1;
                     this.emit('outboundConnect', { inboundConnectReq, upstream, attempt });
                     const connection = upstream ?
                         await this.sslProxyConnect(inboundConnectReq, upstream) :
@@ -281,12 +283,10 @@ export class BaseProxy extends EventEmitter {
                         // No more attempts left at this point
                         reject(error);
                     }
-                } finally {
-                    pending -= 1;
                 }
             };
             // Finally, actually schedule the connection attempts
-            for (let i = 0; i < this.connectRetryAttempts; i++) {
+            for (let i = 0; i < totalAttempts; i++) {
                 timers.push(setTimeout(tryConnect.bind(this, i), i * this.connectRetryInterval));
             }
         });
