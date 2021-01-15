@@ -353,6 +353,7 @@ export class BaseProxy extends EventEmitter {
             path: targetHost,
             method: 'CONNECT',
             headers: { host: targetHost },
+            agent: false,
             timeout: this.connectTimeout,
             ca: this.getCACertificates(),
             ALPNProtocols: ['http/1.1'],
