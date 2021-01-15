@@ -32,7 +32,7 @@ export class RoutingProxy extends BaseProxy {
 
     matchRoute(host: string): ProxyUpstream | null {
         for (const route of this.routes) {
-            if (route.hostRegexp.test(host)) {
+            if (new RegExp(route.hostPattern, 'gi').test(host)) {
                 return route.upstream;
             }
         }
@@ -52,8 +52,11 @@ export class RoutingProxy extends BaseProxy {
      * New route is inserted at the beginning of the list, and routes are matched in order
      * they added (first match wins).
      */
-    addRoute(hostRegexp: RegExp, upstream: ProxyUpstream | null, label: string = 'default') {
-        this.routes.unshift({ label, hostRegexp, upstream });
+    insertRoute(route: ProxyInsertRouteSpec, index: number = 0) {
+        this.routes.splice(index, 0, {
+            label: 'default',
+            ...route,
+        });
     }
 
     /**
@@ -67,6 +70,12 @@ export class RoutingProxy extends BaseProxy {
 
 export interface ProxyRoute {
     label: string;
-    hostRegexp: RegExp;
+    hostPattern: string;
+    upstream: ProxyUpstream | null;
+}
+
+export interface ProxyInsertRouteSpec {
+    label?: string;
+    hostPattern: string;
     upstream: ProxyUpstream | null;
 }

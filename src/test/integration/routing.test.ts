@@ -26,11 +26,17 @@ describe('Routing Proxy', () => {
     beforeEach(() => routingProxy.start(0));
     beforeEach(() => {
         routingProxy.clearRoutes();
-        routingProxy.addRoute(/^foo.local:\d+$/, {
-            host: `localhost:${fooProxy.getServerPort()}`,
+        routingProxy.insertRoute({
+            hostPattern: /^foo\.local:\d+$/.source,
+            upstream: {
+                host: `localhost:${fooProxy.getServerPort()}`,
+            }
         });
-        routingProxy.addRoute(/^bar.local:\d+$/, {
-            host: `localhost:${barProxy.getServerPort()}`,
+        routingProxy.insertRoute({
+            hostPattern: /^bar\.local:\d+$/.source,
+            upstream: {
+                host: `localhost:${barProxy.getServerPort()}`,
+            }
         });
     });
     afterEach(() => routingProxy.shutdown(true));
