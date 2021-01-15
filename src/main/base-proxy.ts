@@ -394,8 +394,8 @@ export class BaseProxy extends EventEmitter {
         }
     }
 
-    protected createProxyHttpRequest(req: http.IncomingMessage, proxy: ProxyUpstream): http.ClientRequest {
-        const [hostname, port] = proxy.host.split(':');
+    protected createProxyHttpRequest(req: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
+        const [hostname, port] = upstream.host.split(':');
         const options: http.RequestOptions = {
             hostname,
             port,
@@ -404,11 +404,11 @@ export class BaseProxy extends EventEmitter {
             headers: req.headers,
             timeout: this.connectTimeout,
         };
-        const fwdReq = proxy.useHttps ?
+        const fwdReq = upstream.useHttps ?
             https.request({ ...options, ca: this.getCACertificates() }) :
             http.request(options);
-        if (proxy.username || proxy.password) {
-            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(proxy));
+        if (upstream.username || upstream.password) {
+            fwdReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
         }
         return fwdReq;
     }

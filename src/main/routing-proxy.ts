@@ -52,8 +52,8 @@ export class RoutingProxy extends BaseProxy {
      * New route is inserted at the beginning of the list, and routes are matched in order
      * they added (first match wins).
      */
-    addRoute(hostRegexp: RegExp, proxy: ProxyUpstream | null, label: string = 'default') {
-        this.routes.unshift({ label, hostRegexp, upstream: proxy });
+    addRoute(hostRegexp: RegExp, upstream: ProxyUpstream | null, label: string = 'default') {
+        this.routes.unshift({ label, hostRegexp, upstream });
     }
 
     /**
