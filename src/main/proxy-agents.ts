@@ -57,6 +57,7 @@ export class HttpsProxyAgent extends https.Agent {
                 port: options.port,
                 socket,
                 ALPNProtocols: ['http/1.1'],
+                servername: options.host,
                 ca: this.options.ca,
             });
             tlsSocket.on('error', err => cb(err));
