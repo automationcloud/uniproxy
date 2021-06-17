@@ -149,16 +149,6 @@ export interface SslBumpConfig {
     caPrivateKey: string;
 
     /**
-     * Public key to issue temporary certificates with.
-     */
-    certPublicKey: string;
-
-    /**
-     * Private key to issue temporary certificates with.
-     */
-    certPrivateKey: string;
-
-    /**
      * Number of days for temporary certificates to expire (also used to cleanup cert cache).
      */
     certTtlDays: number;

@@ -16,7 +16,7 @@ import { SslBumpConfig } from './ssl-bump-proxy';
 import tls from 'tls';
 import net from 'net';
 import { pki, md } from 'node-forge';
-import { randomBytes } from 'crypto';
+import crypto from 'crypto';
 import LRUCache from 'lru-cache';
 import { EventEmitter } from 'events';
 
@@ -41,11 +41,22 @@ export class SslCertStore extends EventEmitter {
 
     constructor(config: SslBumpConfig) {
         super();
+        const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+                format: 'pem',
+                type: 'spki',
+            },
+            privateKeyEncoding: {
+                format: 'pem',
+                type: 'pkcs8',
+            }
+        });
         this.caCert = pki.certificateFromPem(config.caCert);
         this.caCertPem = pki.certificateToPem(this.caCert);
         this.caPrivateKey = pki.privateKeyFromPem(config.caPrivateKey);
-        this.certPublicKey = pki.publicKeyFromPem(config.certPublicKey);
-        this.certPrivateKey = pki.privateKeyFromPem(config.certPrivateKey);
+        this.certPublicKey = pki.publicKeyFromPem(publicKey);
+        this.certPrivateKey = pki.privateKeyFromPem(privateKey);
         this.certPrivateKeyPem = pki.privateKeyToPem(this.certPrivateKey);
         this.certTtlDays = config.certTtlDays;
         this.certPemCache = new LRUCache({
@@ -97,7 +108,7 @@ export class SslCertStore extends EventEmitter {
     createCertificate(hostname: string): string {
         const cert = pki.createCertificate();
         cert.publicKey = this.certPublicKey;
-        cert.serialNumber = '01' + parseInt(randomBytes(8).toString('hex'), 16);
+        cert.serialNumber = '01' + parseInt(crypto.randomBytes(8).toString('hex'), 16);
         cert.validity.notBefore = new Date(Date.now() - DAY);
         cert.validity.notAfter = new Date(Date.now() + this.certTtlDays * DAY);
         cert.setSubject([

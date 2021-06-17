@@ -1,5 +1,5 @@
 import { HttpsProxyAgent, SslBumpProxy } from '../../main';
-import { certificate, privateKey, publicKey } from '../certs';
+import { certificate, privateKey } from '../certs';
 import { HTTPS_PORT } from '../env';
 import fetch from 'node-fetch';
 import assert from 'assert';
@@ -19,8 +19,6 @@ describe('SSL Bumping', () => {
             // Note: we use same keys and certs for testing, but in reality those should be different!
             caCert: certificate,
             caPrivateKey: privateKey,
-            certPrivateKey: privateKey,
-            certPublicKey: publicKey,
             certCacheMaxEntries: 100,
             certTtlDays: 365,
         });
