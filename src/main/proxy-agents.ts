@@ -35,7 +35,8 @@ export class HttpsProxyAgent extends https.Agent {
 
     createConnection(options: any, cb: (err: Error | null, socket?: net.Socket) => void) {
         const [hostname, port] = this.upstream.host.split(':');
-        const connectReq = http.request({
+        const request = this.upstream.useHttps ? https.request : http.request;
+        const connectReq = request({
             method: 'connect',
             hostname,
             port: Number(port) || 80,
@@ -43,7 +44,10 @@ export class HttpsProxyAgent extends https.Agent {
             headers: {
                 host: options.host,
             },
-        });
+            ca: this.options.ca,
+            ALPNProtocols: ['http/1.1'],
+            servername: hostname,
+        } as any);
         if (this.upstream.username || this.upstream.password) {
             connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(this.upstream));
         }
