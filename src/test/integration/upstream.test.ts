@@ -1,10 +1,11 @@
-import { HttpProxyAgent, HttpsProxyAgent } from '../../main';
-import fetch from 'node-fetch';
-import { HTTP_PORT, HTTPS_PORT } from '../env';
 import assert from 'assert';
-import { UpstreamProxy } from '../upstream';
 import https from 'https';
+import fetch from 'node-fetch';
+
+import { HttpProxyAgent, HttpsProxyAgent } from '../../main';
 import { certificate } from '../certs';
+import { HTTP_PORT, HTTPS_PORT } from '../env';
+import { UpstreamProxy } from '../upstream';
 
 describe('Upstream Proxy', () => {
 

@@ -16,7 +16,8 @@ import http from 'http';
 import https from 'https';
 import net from 'net';
 import tls from 'tls';
-import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed } from './commons';
+
+import { makeBasicAuthHeader, ProxyConnectionFailed, ProxyUpstream } from './commons';
 
 /**
  * Quick-and-simple agent for issuing HTTPS requests via a proxy.

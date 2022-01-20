@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { BaseProxy } from './base-proxy';
-import { SslCertStore } from './ssl-cert-store';
 import http from 'http';
 import net from 'net';
-import tls from 'tls';
 import { pipeline } from 'stream';
+import tls from 'tls';
 import { promisify } from 'util';
-import { Connection, ProxyConfig } from './config';
+
+import { BaseProxy } from './base-proxy';
+import { Connection } from './commons';
+import { ProxyConfig } from './config';
 import { Exception } from './exception';
+import { SslCertStore } from './ssl-cert-store';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -164,6 +166,6 @@ export class RemoteConnectionNotAuthorized extends Exception {
 
     constructor(cause: Error) {
         super(`Remote connection not authorized: ${cause.message}`);
-        this.details = { cause: { ... cause } };
+        this.details = { cause: { ...cause } };
     }
 }

@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { SslBumpConfig } from './ssl-bump-proxy';
-import tls from 'tls';
-import net from 'net';
-import { pki, md } from 'node-forge';
 import crypto from 'crypto';
-import LRUCache from 'lru-cache';
 import { EventEmitter } from 'events';
+import LRUCache from 'lru-cache';
+import net from 'net';
+import { md, pki } from 'node-forge';
+import tls from 'tls';
+
+import { SslBumpConfig } from './ssl-bump-proxy';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;

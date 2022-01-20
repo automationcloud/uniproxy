@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { pki } from 'node-forge';
 import crypto from 'crypto';
+import { pki } from 'node-forge';
 
 const hour = 60 * 60 * 1000;
 

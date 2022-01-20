@@ -14,7 +14,6 @@
 
 import { ProxyUpstream } from './commons';
 import { Logger } from './logger';
-import net from 'net';
 
 /**
  * Proxy configuration object.
@@ -70,15 +69,3 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
     connectRetryInterval: 1000,
     connectTimeout: 10000,
 };
-
-/**
- * Describes an outbound connection established by proxy instance.
- * This can be either a direct connection to target host, or a connection to an upstream proxy.
- */
-export interface Connection {
-    connectionId: string;
-    partitionId?: string;
-    upstream: ProxyUpstream | null;
-    socket: net.Socket;
-    host: string;
-}

@@ -1,8 +1,9 @@
+import assert from 'assert';
+import fetch from 'node-fetch';
+
 import { HttpsProxyAgent, SslBumpProxy } from '../../main';
 import { certificate, privateKey } from '../certs';
 import { HTTPS_PORT } from '../env';
-import fetch from 'node-fetch';
-import assert from 'assert';
 import { UpstreamProxy } from '../upstream';
 
 describe('SSL Bumping', () => {

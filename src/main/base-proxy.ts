@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { EventEmitter } from 'events';
 import http, { STATUS_CODES } from 'http';
 import https from 'https';
 import net from 'net';
-import tls from 'tls';
 import { pipeline } from 'stream';
+import tls from 'tls';
 import { promisify } from 'util';
-import { makeBasicAuthHeader, ProxyUpstream, ProxyConnectionFailed, ProxyConnectionTimeout } from './commons';
+
+import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyUpstream } from './commons';
+import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 import { Logger } from './logger';
-import { Connection, DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
-import { EventEmitter } from 'events';
 
 const pipelineAsync = promisify(pipeline);
 

@@ -1,6 +1,7 @@
-import { BaseProxy } from '../main';
 import http from 'http';
 import net from 'net';
+
+import { BaseProxy } from '../main';
 import { certificate } from './certs';
 import { testLogger } from './logger';
 

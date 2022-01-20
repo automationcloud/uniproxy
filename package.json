@@ -31,6 +31,7 @@
         "@types/node-fetch": "^2.5.7",
         "@typescript-eslint/eslint-plugin": "^4.8.1",
         "@typescript-eslint/parser": "^4.8.1",
+        "@ubio/eslint-config": "^1.2.1",
         "eslint": "^7.14.0",
         "eslint-config-recommended": "^4.1.0",
         "mocha": "^8.2.1",

@@ -1,4 +1,6 @@
 import http from 'http';
+import net from 'net';
+
 import { Exception } from './exception';
 
 export interface ProxyUpstream {
@@ -6,6 +8,18 @@ export interface ProxyUpstream {
     username?: string;
     password?: string;
     useHttps?: boolean;
+}
+
+/**
+ * Describes an outbound connection established by proxy instance.
+ * This can be either a direct connection to target host, or a connection to an upstream proxy.
+ */
+export interface Connection {
+    connectionId: string;
+    partitionId?: string;
+    upstream: ProxyUpstream | null;
+    socket: net.Socket;
+    host: string;
 }
 
 export function makeBasicAuthHeader(config: ProxyUpstream) {

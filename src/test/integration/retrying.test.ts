@@ -1,9 +1,10 @@
+import assert from 'assert';
+import fetch from 'node-fetch';
+
 import { HttpsProxyAgent } from '../../main';
+import { certificate } from '../certs';
 import { HTTPS_PORT } from '../env';
 import { UpstreamProxy } from '../upstream';
-import fetch from 'node-fetch';
-import assert from 'assert';
-import { certificate } from '../certs';
 
 describe('Retry on connect', () => {
 

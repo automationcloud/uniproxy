@@ -1,11 +1,12 @@
-import { HttpProxyAgent, HttpsProxyAgent, ProxyUpstream, RoutingProxy } from '../../main';
-import { HTTPS_PORT, HTTP_PORT } from '../env';
-import { UpstreamProxy } from '../upstream';
-import fetch from 'node-fetch';
-import https from 'https';
-import http from 'http';
 import assert from 'assert';
+import http from 'http';
+import https from 'https';
+import fetch from 'node-fetch';
+
+import { HttpProxyAgent, HttpsProxyAgent, ProxyUpstream, RoutingProxy } from '../../main';
 import { certificate } from '../certs';
+import { HTTP_PORT, HTTPS_PORT } from '../env';
+import { UpstreamProxy } from '../upstream';
 
 describe('Routing Proxy', () => {
 

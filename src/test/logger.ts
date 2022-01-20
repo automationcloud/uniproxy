@@ -5,4 +5,4 @@ export const testLogger: Logger = process.env.DEBUG ? console : {
     warn() {},
     error() {},
     debug() {},
-}
+};
