@@ -92,6 +92,25 @@ describe('Upstream Proxy', () => {
                 `localhost:${HTTPS_PORT}`);
         });
 
+        it('calculates byte stats', async () => {
+            assert.strictEqual(upstreamProxy.stats.bytesRead, 0);
+            assert.strictEqual(upstreamProxy.stats.bytesWritten, 0);
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${upstreamProxy.getServerPort()}`,
+            }, { ca: certificate });
+            await fetch(`https://localhost:${HTTPS_PORT}/foo`, {
+                agent,
+                method: 'POST',
+                body: 'Hello world!'
+            });
+            assert(upstreamProxy.stats.bytesRead > 100);
+            assert(upstreamProxy.stats.bytesWritten > 100);
+            await upstreamProxy.shutdown(true);
+            await upstreamProxy.start(0);
+            assert.strictEqual(upstreamProxy.stats.bytesRead, 0);
+            assert.strictEqual(upstreamProxy.stats.bytesWritten, 0);
+        });
+
     });
 
 });
