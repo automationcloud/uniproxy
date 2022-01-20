@@ -105,7 +105,7 @@ describe('Upstream Proxy', () => {
             });
             assert(upstreamProxy.stats.bytesRead > 100);
             assert(upstreamProxy.stats.bytesWritten > 100);
-            await upstreamProxy.shutdown();
+            await upstreamProxy.shutdown(true);
             await upstreamProxy.start(0);
             assert.strictEqual(upstreamProxy.stats.bytesRead, 0);
             assert.strictEqual(upstreamProxy.stats.bytesWritten, 0);
