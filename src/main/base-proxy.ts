@@ -20,7 +20,7 @@ import { pipeline } from 'stream';
 import tls from 'tls';
 import { promisify } from 'util';
 
-import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyUpstream } from './commons';
+import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyStats, ProxyUpstream } from './commons';
 import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 import { Logger } from './logger';
 
@@ -37,6 +37,7 @@ export class BaseProxy extends EventEmitter {
     server: http.Server | null = null;
     clientSockets: Set<net.Socket> = new Set();
     trackedConnections: Map<string, Connection> = new Map();
+    stats: ProxyStats = { bytesRead: 0, bytesWritten: 0 };
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
@@ -87,6 +88,16 @@ export class BaseProxy extends EventEmitter {
     }
 
     /**
+     * Resets proxy server stats.
+     */
+    clearStats() {
+        this.stats = {
+            bytesRead: 0,
+            bytesWritten: 0,
+        };
+    }
+
+    /**
      * Starts a proxy server on specified port.
      */
     async start(
@@ -107,6 +118,7 @@ export class BaseProxy extends EventEmitter {
                 .listen(port, hostname);
             this.server.on('listening', () => resolve());
             this.server.on('error', error => reject(error));
+            this.clearStats();
         });
     }
 
@@ -161,6 +173,14 @@ export class BaseProxy extends EventEmitter {
     protected onConnection(socket: net.Socket) {
         this.clientSockets.add(socket);
         socket.on('close', () => this.clientSockets.delete(socket));
+        socket.on('data', buf => {
+            this.stats.bytesRead += buf.length;
+        });
+        const write = socket.write;
+        socket.write = (buf: Buffer, ...args: any[]) => {
+            this.stats.bytesWritten += buf.length;
+            return write.call(socket, buf, ...args);
+        };
     }
 
     /**

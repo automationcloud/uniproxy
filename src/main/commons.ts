@@ -10,6 +10,11 @@ export interface ProxyUpstream {
     useHttps?: boolean;
 }
 
+export interface ProxyStats {
+    bytesRead: number;
+    bytesWritten: number;
+}
+
 /**
  * Describes an outbound connection established by proxy instance.
  * This can be either a direct connection to target host, or a connection to an upstream proxy.
