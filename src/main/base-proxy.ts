@@ -21,6 +21,7 @@ import tls from 'tls';
 import { promisify } from 'util';
 
 import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyStats, ProxyUpstream } from './commons';
+import { Exception } from './exception';
 import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 import { Logger } from './logger';
 
@@ -151,7 +152,26 @@ export class BaseProxy extends EventEmitter {
     }
 
     getServerPort(): number {
-        return (this.server?.address() as net.AddressInfo)?.port ?? -1;
+        if (!this.server) {
+            throw new ServerNotInitialised();
+        }
+
+        // from https://nodejs.org/dist/latest-v16.x/docs/api/net.html
+        // server.address() returns null before the 'listening' event has been emitted or after calling server.close()
+        // returns an object { port: 12346, family: 'IPv4', address: '127.0.0.1' } when listening on an IP socket
+        // returns a string "\\\\.\\pipe\\thePipeName" when listening on a pipe
+        const address: null | string | net.AddressInfo = this.server.address();
+        if (address === null) {
+            throw new ServerNotListening();
+        }
+        if (typeof address === 'string') {
+            throw new PortDoesNotExist();
+        }
+        if (typeof address.port !== 'number') {
+            // this should never happen, really
+            throw new PortDoesNotExist();
+        }
+        return address.port;
     }
 
     /**
@@ -446,4 +466,25 @@ export class BaseProxy extends EventEmitter {
         });
     }
 
+}
+
+export class ServerNotInitialised extends Exception {
+    constructor() {
+        super('ServerNotInitialised');
+        this.message = 'The listening server has not been initialised. Did you call .start()?';
+    }
+}
+
+export class ServerNotListening extends Exception {
+    constructor() {
+        super('ServerNotListening');
+        this.message = 'The server is not listening. Did you call .start()?';
+    }
+}
+
+export class PortDoesNotExist extends Exception {
+    constructor() {
+        super('PortDoesNotExist');
+        this.message = 'The server is not listening to an IP socket.';
+    }
 }
