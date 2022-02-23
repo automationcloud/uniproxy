@@ -161,7 +161,7 @@ export class BaseProxy extends EventEmitter {
         // returns an object { port: 12346, family: 'IPv4', address: '127.0.0.1' } when listening on an IP socket
         // returns a string "\\\\.\\pipe\\thePipeName" when listening on a pipe
         const address: null | string | net.AddressInfo = this.server.address();
-        if (address === null) {
+        if (address == null) {
             throw new ServerNotListening();
         }
         if (typeof address === 'string') {
