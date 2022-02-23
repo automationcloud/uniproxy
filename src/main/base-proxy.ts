@@ -354,7 +354,7 @@ export class BaseProxy extends EventEmitter {
             const error = new ProxyConnectionFailed(upstream, connectRes.statusCode!);
             throw error;
         }
-        const connectionIdHeader = String(connectRes.headers['x-connection-id'] || '');
+        const connectionIdHeader = String(connectRes.headers['x-connection-id'] || inboundConnectReq.headers['x-partition-id'] || '');
         const connectionId = connectionIdHeader || Math.random().toString(36).substring(2);
         const connection: Connection = { connectionId, host, upstream, socket };
         return connection;
@@ -365,7 +365,8 @@ export class BaseProxy extends EventEmitter {
      */
     protected async sslDirectConnect(inboundConnectReq: http.IncomingMessage): Promise<Connection> {
         const host = inboundConnectReq.url!;
-        const connectionId = Math.random().toString(36).substring(2);
+        const connectionIdHeader = String(inboundConnectReq.headers['x-partition-id'] || '');
+        const connectionId = connectionIdHeader || Math.random().toString(36).substring(2);
         const socket = await new Promise<net.Socket>((resolve, reject) => {
             const url = new URL('https://' + host);
             const port = Number(url.port) || 443;

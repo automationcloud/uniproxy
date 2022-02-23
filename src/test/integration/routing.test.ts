@@ -198,6 +198,14 @@ describe('Routing Proxy', () => {
                 assert.strictEqual(fooProxy.interceptedConnectRequest.headers['x-partition-id'], 'Hola Amigo');
             });
 
+            it('sets the correct connectionId as the value of x-partition-id', async () => {
+                const agent = new HttpsProxyAgent({
+                    host: `localhost:${partitionProxy.getServerPort()}`,
+                }, { ca: certificate });
+                const res = await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
+                assert(partitionProxy.trackedConnections.has('Hola Amigo'));
+            });
+
         });
 
     });
