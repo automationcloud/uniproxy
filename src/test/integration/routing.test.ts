@@ -171,23 +171,31 @@ describe('Routing Proxy', () => {
             throw new Error('Expected all connections to close');
         });
 
-        describe('partitionId', () => {
+        describe('partition headers', () => {
 
-            // This proxy will act as a pass-through proxy which will include partitionId in its CONNECT request
-            const partitionProxy = new (class extends RoutingProxy {
-                matchRoute() {
-                    return { host: `localhost:${routingProxy.getServerPort()}` };
-                }
-                createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
-                    const req = super.createConnectRequest(inboundConnectReq, upstream);
-                    req.setHeader('x-partition-id', 'Hola Amigo');
-                    return req;
-                }
-            })();
-            beforeEach(() => partitionProxy.start(0));
+            // This proxy will act as a pass-through proxy which will include all x-partition-* headers in its CONNECT request
+            let partitionProxy: RoutingProxy;
+
+            beforeEach(() => {
+                partitionProxy = new RoutingProxy();
+                return partitionProxy.start(0);
+            });
             afterEach(() => partitionProxy.shutdown(true));
 
-            it('propagates x-partition-id header to upstreams', async () => {
+            it('propagates x-partition-id header to upstreams when set via method overloading', async () => {
+                // This proxy will act as a pass-through proxy which will include partitionId in its CONNECT request
+                await partitionProxy.shutdown();
+                partitionProxy = new (class extends RoutingProxy {
+                    matchRoute() {
+                        return { host: `localhost:${routingProxy.getServerPort()}` };
+                    }
+                    createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
+                        const req = super.createConnectRequest(inboundConnectReq, upstream);
+                        req.setHeader('x-partition-id', 'Hola Amigo');
+                        return req;
+                    }
+                })();
+                await partitionProxy.start(0);
                 const agent = new HttpsProxyAgent({
                     host: `localhost:${partitionProxy.getServerPort()}`,
                 }, { ca: certificate });
@@ -196,6 +204,46 @@ describe('Routing Proxy', () => {
                 assert.strictEqual(text, 'You requested GET /foo over https');
                 assert.ok(fooProxy.interceptedConnectRequest);
                 assert.strictEqual(fooProxy.interceptedConnectRequest.headers['x-partition-id'], 'Hola Amigo');
+            });
+
+            it('sends any x-partition-* header to upstreams when set via configuration', async () => {
+                partitionProxy.insertRoute({
+                    hostPattern: /.*/.source,
+                    upstream: {
+                        host: `localhost:${routingProxy.getServerPort()}`,
+                        connectHeaders: {
+                            'x-partition-name': 'some partition name',
+                            'x-partition-foo': 'bar'
+                        }
+                    }
+                });
+                const agent = new HttpsProxyAgent({
+                    host: `localhost:${partitionProxy.getServerPort()}`,
+                }, { ca: certificate });
+                const res = await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
+                const text = await res.text();
+                assert.strictEqual(text, 'You requested GET /foo over https');
+                assert.ok(fooProxy.interceptedConnectRequest);
+                assert.strictEqual(fooProxy.interceptedConnectRequest.headers['x-partition-name'], 'some partition name');
+                assert.strictEqual(fooProxy.interceptedConnectRequest.headers['x-partition-foo'], 'bar');
+            });
+
+            it('sets x-connection-id in the reply to the CONNECT request', async () => {
+                partitionProxy.insertRoute({
+                    hostPattern: /.*/.source,
+                    upstream: {
+                        host: `localhost:${routingProxy.getServerPort()}`,
+                        connectHeaders: {
+                            'x-partition-id': 'some partition id',
+                        }
+                    }
+                });
+                const agent = new HttpsProxyAgent({
+                    host: `localhost:${partitionProxy.getServerPort()}`,
+                }, { ca: certificate });
+                const res = await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
+                assert(!!fooProxy.lastConnection);
+                assert(partitionProxy.trackedConnections.has(fooProxy.lastConnection.connectionId));
             });
 
         });

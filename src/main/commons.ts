@@ -8,6 +8,11 @@ export interface ProxyUpstream {
     username?: string;
     password?: string;
     useHttps?: boolean;
+    connectHeaders?: RequestHeaders;
+}
+
+export interface RequestHeaders {
+    [key: string]: string;
 }
 
 export interface ProxyStats {
@@ -22,6 +27,7 @@ export interface ProxyStats {
 export interface Connection {
     connectionId: string;
     partitionId?: string;
+    partitionHeaders?: RequestHeaders;
     upstream: ProxyUpstream | null;
     socket: net.Socket;
     host: string;

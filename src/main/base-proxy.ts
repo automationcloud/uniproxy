@@ -276,9 +276,13 @@ export class BaseProxy extends EventEmitter {
         const { connectionId, socket } = connection;
         this.trackedConnections.set(connectionId, connection);
         socket.on('close', () => this.trackedConnections.delete(connectionId));
-        const partitionId = String(inboundConnectReq.headers['x-partition-id'] || '');
+        const partitionHeaders = getPartitionHeaders(inboundConnectReq.headers);
+        const partitionId = String(partitionHeaders['x-partition-id'] || '');
         if (partitionId) {
             connection.partitionId = partitionId;
+        }
+        if (Object.keys(partitionHeaders).length > 0) {
+            connection.partitionHeaders = partitionHeaders;
         }
         return connection;
     }
@@ -403,9 +407,14 @@ export class BaseProxy extends EventEmitter {
         if (upstream.username || upstream.password) {
             connectReq.setHeader('Proxy-Authorization', makeBasicAuthHeader(upstream));
         }
-        const partitionId = inboundConnectReq.headers['x-partition-id'];
-        if (partitionId) {
-            connectReq.setHeader('X-Partition-Id', partitionId);
+        // propagate headers
+        const partitionHeaders = getPartitionHeaders(inboundConnectReq.headers);
+        for (const key in partitionHeaders) {
+            connectReq.setHeader(key, partitionHeaders[key]);
+        }
+        // set headers (overwrites propagated ones)
+        for (const key in upstream.connectHeaders) {
+            connectReq.setHeader(key, upstream.connectHeaders[key]);
         }
         return connectReq;
     }
@@ -487,4 +496,8 @@ export class PortDoesNotExist extends Exception {
         super('PortDoesNotExist');
         this.message = 'The server is not listening to an IP socket.';
     }
+}
+
+function getPartitionHeaders(headers: { [key: string]: any }) {
+    return Object.fromEntries(Object.entries(headers).filter(([key]) => key.match(/x-partition-/i)));
 }

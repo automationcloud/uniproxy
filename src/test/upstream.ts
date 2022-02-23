@@ -1,6 +1,7 @@
 import http from 'http';
 import net from 'net';
 
+import { Connection } from '../main/commons';
 import { BaseProxy } from '../main';
 import { certificate } from './certs';
 import { testLogger } from './logger';
@@ -11,6 +12,7 @@ import { testLogger } from './logger';
 export class UpstreamProxy extends BaseProxy {
     interceptedHttpRequest: http.IncomingMessage | null = null;
     interceptedConnectRequest: http.IncomingMessage | null = null;
+    lastConnection: Connection | null = null;
 
     // For testing connection delays or interruptions
     errorOnConnect: Error | null = null;
@@ -43,6 +45,11 @@ export class UpstreamProxy extends BaseProxy {
     async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         this.interceptedHttpRequest = req;
         await super.onRequest(req, res);
+    }
+
+    async replyToConnectRequest(clientSocket: net.Socket, connection: Connection) {
+        this.lastConnection = connection;
+        return super.replyToConnectRequest(clientSocket, connection);
     }
 
     // Note: we use authenticate for simulating connection issues, as it's invoked in both flows
