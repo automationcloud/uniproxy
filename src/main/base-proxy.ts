@@ -151,7 +151,7 @@ export class BaseProxy extends EventEmitter {
     }
 
     getServerPort(): number {
-        return (this.server?.address() as net.AddressInfo)?.port ?? 0;
+        return (this.server?.address() as net.AddressInfo)?.port ?? -1;
     }
 
     /**
