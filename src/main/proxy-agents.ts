@@ -60,6 +60,7 @@ export class HttpsProxyAgent extends https.Agent {
             const tlsSocket = tls.connect({
                 host: options.host,
                 port: options.port,
+                rejectUnauthorized: options.rejectUnauthorized,
                 socket,
                 ALPNProtocols: ['http/1.1'],
                 servername: options.host,
