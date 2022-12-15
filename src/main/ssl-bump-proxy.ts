@@ -1,17 +1,3 @@
-// Copyright 2020 UBIO Limited
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 import http from 'http';
 import net from 'net';
 import { pipeline } from 'stream';
@@ -21,7 +7,6 @@ import { promisify } from 'util';
 import { BaseProxy } from './base-proxy';
 import { Connection } from './commons';
 import { ProxyConfig } from './config';
-import { Exception } from './exception';
 import { SslCertStore } from './ssl-cert-store';
 
 const pipelineAsync = promisify(pipeline);
@@ -69,11 +54,11 @@ export class SslBumpProxy extends BaseProxy {
         this.certStore = new SslCertStore(config);
     }
 
-    getCACertificates() {
+    override getCACertificates() {
         return [this.sslBumpConfig.caCert, ...super.getCACertificates()];
     }
 
-    async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+    override async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         try {
             await this.authenticate(req);
             // req.url always contains hostname:port
@@ -111,7 +96,7 @@ export class SslBumpProxy extends BaseProxy {
      * @param tlsRemoteSocket A remote server TLS socket (i.e. the target website)
      * @param connection A established outward Connection instance (contains connectionId, host and initial socket)
      */
-    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, connection: Connection): Promise<void> {
+    async handleTls(tlsClientSocket: net.Socket, tlsRemoteSocket: net.Socket, _connection: Connection): Promise<void> {
         await Promise.all([
             pipelineAsync(tlsClientSocket, tlsRemoteSocket),
             pipelineAsync(tlsRemoteSocket, tlsClientSocket),
@@ -161,7 +146,8 @@ export interface SslBumpConfig {
     certCacheMaxEntries: number;
 }
 
-export class RemoteConnectionNotAuthorized extends Exception {
+export class RemoteConnectionNotAuthorized extends Error {
+    override name = this.constructor.name;
     details: any;
 
     constructor(cause: Error) {

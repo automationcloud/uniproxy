@@ -60,7 +60,7 @@ describe('Retry on connect', () => {
             try {
                 await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
                 throw new Error('UnexpectedSuccess');
-            } catch (err) {
+            } catch (err: any) {
                 assert.strict(err.name, 'FetchError');
                 assert.strictEqual(proxy.connectAttempts, 2);
                 assert.strictEqual(upstream.connectAttempts, 0);
@@ -100,7 +100,7 @@ describe('Retry on connect', () => {
             try {
                 await fetch(`https://localhost:${HTTPS_PORT}/foo`, { agent });
                 throw new Error('UnexpectedSuccess');
-            } catch (err) {
+            } catch (err: any) {
                 assert.strict(err.name, 'FetchError');
                 assert.strictEqual(proxy.connectAttempts, 2);
                 assert.strictEqual(upstream.connectAttempts, 0);

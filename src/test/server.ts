@@ -27,7 +27,7 @@ async function handler(req: http.IncomingMessage, res: http.ServerResponse) {
 }
 
 export async function startServer(server: http.Server, port: number) {
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
         server.listen(port, resolve).on('error', reject);
     });
 }

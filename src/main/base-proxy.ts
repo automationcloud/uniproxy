@@ -1,17 +1,3 @@
-// Copyright 2020 UBIO Limited
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 import { EventEmitter } from 'events';
 import http, { STATUS_CODES } from 'http';
 import https from 'https';
@@ -21,7 +7,6 @@ import tls from 'tls';
 import { promisify } from 'util';
 
 import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyStats, ProxyUpstream } from './commons';
-import { Exception } from './exception';
 import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 import { Logger } from './logger';
 
@@ -76,7 +61,7 @@ export class BaseProxy extends EventEmitter {
      * @param request - the initial proxy http request; this will be either a CONNECT request for https,
      *   or a regular http request containing full URL in its first line (req.url).
      */
-    matchRoute(host: string, request: http.IncomingMessage): ProxyUpstream | null {
+    matchRoute(_host: string, _request: http.IncomingMessage): ProxyUpstream | null {
         return this.defaultUpstream;
     }
 
@@ -114,7 +99,7 @@ export class BaseProxy extends EventEmitter {
                 .createServer(options)
                 .on('connection', socket => this.onConnection(socket))
                 .on('request', (req, res) => this.onRequest(req, res))
-                .on('connect', (req, socket) => this.onConnect(req, socket))
+                .on('connect', (req, socket) => this.onConnect(req, socket as any))
                 .on('close', () => (this.server = null))
                 .listen(port, hostname);
             this.server.on('listening', () => resolve());
@@ -160,7 +145,7 @@ export class BaseProxy extends EventEmitter {
         // server.address() returns null before the 'listening' event has been emitted or after calling server.close()
         // returns an object { port: 12346, family: 'IPv4', address: '127.0.0.1' } when listening on an IP socket
         // returns a string "\\\\.\\pipe\\thePipeName" when listening on a pipe
-        const address: null | string | net.AddressInfo = this.server.address();
+        const address = this.server.address();
         if (address == null) {
             throw new ServerNotListening();
         }
@@ -226,7 +211,7 @@ export class BaseProxy extends EventEmitter {
     /**
      * A hook for authenticating proxy requests.
      */
-    async authenticate(req: http.IncomingMessage) {}
+    async authenticate(_req: http.IncomingMessage) {}
 
     // HTTPS
 
@@ -468,23 +453,17 @@ export class BaseProxy extends EventEmitter {
 
 }
 
-export class ServerNotInitialised extends Exception {
-    constructor() {
-        super('ServerNotInitialised');
-        this.message = 'The listening server has not been initialised. Did you call .start()?';
-    }
+export class ServerNotInitialised extends Error {
+    override name = this.constructor.name;
+    override message = 'The listening server has not been initialised. Did you call .start()?';
 }
 
-export class ServerNotListening extends Exception {
-    constructor() {
-        super('ServerNotListening');
-        this.message = 'The server is not listening. Did you call .start()?';
-    }
+export class ServerNotListening extends Error {
+    override name = this.constructor.name;
+    override message = 'The server is not listening. Did you call .start()?';
 }
 
-export class PortDoesNotExist extends Exception {
-    constructor() {
-        super('PortDoesNotExist');
-        this.message = 'The server is not listening to an IP socket.';
-    }
+export class PortDoesNotExist extends Error {
+    override name = this.constructor.name;
+    override message = 'The server is not listening to an IP socket.';
 }

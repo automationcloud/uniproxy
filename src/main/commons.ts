@@ -1,8 +1,6 @@
 import http from 'http';
 import net from 'net';
 
-import { Exception } from './exception';
-
 export interface ProxyUpstream {
     host: string;
     username?: string;
@@ -40,7 +38,8 @@ export function makeProxyUrl(config: ProxyUpstream) {
     return `${protocol}//${auth}${config.host}`;
 }
 
-export class ProxyConnectionFailed extends Exception {
+export class ProxyConnectionFailed extends Error {
+    override name = this.constructor.name;
     status: number;
     details: any;
 
@@ -51,7 +50,8 @@ export class ProxyConnectionFailed extends Exception {
     }
 }
 
-export class ProxyConnectionTimeout extends Exception {
+export class ProxyConnectionTimeout extends Error {
+    override name = this.constructor.name;
     details: any;
 
     constructor(upstream: ProxyUpstream | null) {

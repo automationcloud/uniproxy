@@ -6,6 +6,7 @@ before(() => {
     patchDnsLookup([
         ['foo.local', '127.0.0.1'],
         ['bar.local', '127.0.0.1'],
+        ['localhost', '127.0.0.1'],
     ]);
 });
 

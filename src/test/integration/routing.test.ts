@@ -175,10 +175,10 @@ describe('Routing Proxy', () => {
 
             // This proxy will act as a pass-through proxy which will include partitionId in its CONNECT request
             const partitionProxy = new (class extends RoutingProxy {
-                matchRoute() {
+                override matchRoute() {
                     return { host: `localhost:${routingProxy.getServerPort()}` };
                 }
-                createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
+                override createConnectRequest(inboundConnectReq: http.IncomingMessage, upstream: ProxyUpstream): http.ClientRequest {
                     const req = super.createConnectRequest(inboundConnectReq, upstream);
                     req.setHeader('x-partition-id', 'Hola Amigo');
                     return req;

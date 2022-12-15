@@ -19,12 +19,12 @@ export class UpstreamProxy extends BaseProxy {
 
     constructor() {
         super({ logger: testLogger });
-        this.on('outboundConnect', params => {
+        this.on('outboundConnect', _params => {
             this.connectAttempts += 1;
         });
     }
 
-    getCACertificates() {
+    override getCACertificates() {
         return [...super.getCACertificates(), certificate];
     }
 
@@ -35,18 +35,18 @@ export class UpstreamProxy extends BaseProxy {
         this.delayOnConnect = 0;
     }
 
-    async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
+    override async onConnect(req: http.IncomingMessage, clientSocket: net.Socket) {
         this.interceptedConnectRequest = req;
         await super.onConnect(req, clientSocket);
     }
 
-    async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    override async onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
         this.interceptedHttpRequest = req;
         await super.onRequest(req, res);
     }
 
     // Note: we use authenticate for simulating connection issues, as it's invoked in both flows
-    async authenticate(req: http.IncomingMessage) {
+    override async authenticate(_req: http.IncomingMessage) {
         await this.simulateConnectDelay();
         await this.simulateConnectError();
     }
