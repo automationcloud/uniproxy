@@ -6,7 +6,7 @@ import { pipeline } from 'stream';
 import tls from 'tls';
 import { promisify } from 'util';
 
-import { Connection, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyStats, ProxyUpstream } from './commons';
+import { Connection, createUpstreamUrl, makeBasicAuthHeader, ProxyConnectionFailed, ProxyConnectionTimeout, ProxyStats, ProxyUpstream } from './commons';
 import { DEFAULT_PROXY_CONFIG, ProxyConfig } from './config';
 import { Logger } from './logger';
 
@@ -21,9 +21,10 @@ const pipelineAsync = promisify(pipeline);
  */
 export class BaseProxy extends EventEmitter {
     server: http.Server | null = null;
-    clientSockets: Set<net.Socket> = new Set();
-    trackedConnections: Map<string, Connection> = new Map();
+    clientSockets = new Set<net.Socket>();
+    trackedConnections = new Map<string, Connection>();
     stats: ProxyStats = { bytesRead: 0, bytesWritten: 0 };
+    upstreamStats = new Map<string, ProxyStats>();
 
     defaultUpstream: ProxyUpstream | null;
     logger: Logger;
@@ -81,6 +82,7 @@ export class BaseProxy extends EventEmitter {
             bytesRead: 0,
             bytesWritten: 0,
         };
+        this.upstreamStats.clear();
     }
 
     /**
@@ -179,11 +181,11 @@ export class BaseProxy extends EventEmitter {
         this.clientSockets.add(socket);
         socket.on('close', () => this.clientSockets.delete(socket));
         socket.on('data', buf => {
-            this.stats.bytesRead += buf.length;
+            this.stats.bytesRead += buf.byteLength ?? buf.length;
         });
         const write = socket.write;
         socket.write = (buf: Buffer, ...args: any[]) => {
-            this.stats.bytesWritten += buf.length;
+            this.stats.bytesWritten += buf.byteLength ?? buf.length;
             return write.call(socket, buf, ...args);
         };
     }
@@ -222,6 +224,8 @@ export class BaseProxy extends EventEmitter {
             const upstream = this.matchRoute(req.url!, req);
             const remoteConn = await this.createSslConnection(req, upstream);
             await this.replyToConnectRequest(clientSocket, remoteConn);
+            const upstreamUrl = createUpstreamUrl(upstream);
+            this.collectRouteStats(upstreamUrl, clientSocket, remoteConn.socket);
             await Promise.all([
                 pipelineAsync(remoteConn.socket, clientSocket),
                 pipelineAsync(clientSocket, remoteConn.socket),
@@ -448,6 +452,31 @@ export class BaseProxy extends EventEmitter {
             method: req.method,
             headers: req.headers,
             timeout: this.connectTimeout,
+        });
+    }
+
+    protected collectRouteStats(upstreamUrl: string, clientSocket: net.Socket, remoteSocket: net.Socket) {
+        clientSocket.on('data', buf => {
+            const bucket = this.upstreamStats.get(upstreamUrl);
+            if (bucket) {
+                bucket.bytesRead += buf.byteLength ?? buf.length;
+            } else {
+                this.upstreamStats.set(upstreamUrl, {
+                    bytesRead: buf.byteLength,
+                    bytesWritten: 0,
+                });
+            }
+        });
+        remoteSocket.on('data', buf => {
+            const bucket = this.upstreamStats.get(upstreamUrl);
+            if (bucket) {
+                bucket.bytesWritten += buf.byteLength ?? buf.length;
+            } else {
+                this.upstreamStats.set(upstreamUrl, {
+                    bytesRead: 0,
+                    bytesWritten: buf.byteLength,
+                });
+            }
         });
     }
 

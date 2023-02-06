@@ -171,6 +171,25 @@ describe('Routing Proxy', () => {
             throw new Error('Expected all connections to close');
         });
 
+        it('calculates byte stats', async () => {
+            assert.strictEqual(routingProxy.stats.bytesRead, 0);
+            assert.strictEqual(routingProxy.stats.bytesWritten, 0);
+            const agent = new HttpsProxyAgent({
+                host: `localhost:${routingProxy.getServerPort()}`,
+            }, { ca: certificate });
+            await fetch(`https://foo.local:${HTTPS_PORT}/foo`, { agent });
+            assert(routingProxy.stats.bytesRead > 100);
+            assert(routingProxy.stats.bytesWritten > 100);
+            const upstreamUrl = `http://@localhost:${fooProxy.getServerPort()}`;
+            const stats = routingProxy.upstreamStats.get(upstreamUrl)!;
+            assert(stats.bytesRead > 100);
+            assert(stats.bytesWritten > 100);
+            await routingProxy.shutdown(true);
+            await routingProxy.start(0);
+            assert.strictEqual(routingProxy.stats.bytesRead, 0);
+            assert.strictEqual(routingProxy.stats.bytesWritten, 0);
+        });
+
         describe('partitionId', () => {
 
             // This proxy will act as a pass-through proxy which will include partitionId in its CONNECT request

@@ -77,3 +77,11 @@ export function makeResponseHead(res: http.IncomingMessage): string {
     }
     return lines.join('\r\n') + '\r\n\r\n';
 }
+
+export function createUpstreamUrl(upstream: ProxyUpstream | null) {
+    if (!upstream) {
+        return '';
+    }
+    const proto = upstream.useHttps ? 'https:' : 'http:';
+    return `${proto}//${upstream.username ?? ''}@${upstream.host}`;
+}
