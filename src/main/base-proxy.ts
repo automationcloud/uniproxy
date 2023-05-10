@@ -27,7 +27,7 @@ export class BaseProxy extends EventEmitter {
     upstreamStats = new Map<string, ProxyStats>();
 
     defaultUpstream: ProxyUpstream | null;
-    logger: Logger;
+    logger: Logger = console;
     muteErrorCodes: string[];
     warnErrorCodes: string[];
     connectRetryAttempts: number;
@@ -38,7 +38,6 @@ export class BaseProxy extends EventEmitter {
         super();
         const config = { ...DEFAULT_PROXY_CONFIG, ...options };
         this.defaultUpstream = config.defaultUpstream;
-        this.logger = config.logger;
         this.muteErrorCodes = config.muteErrorCodes;
         this.warnErrorCodes = config.warnErrorCodes;
         this.connectRetryAttempts = config.connectRetryAttempts;

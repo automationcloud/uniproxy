@@ -18,7 +18,8 @@ export class UpstreamProxy extends BaseProxy {
     connectAttempts: number = 0;
 
     constructor() {
-        super({ logger: testLogger });
+        super();
+        this.logger = testLogger;
         this.on('outboundConnect', _params => {
             this.connectAttempts += 1;
         });
